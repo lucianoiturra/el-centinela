@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import AuthProvider from "@/components/AuthProvider";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "El Centinela",
@@ -16,7 +18,16 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+        <Script
+          id="register-sw"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`,
+          }}
+        />
+      </body>
     </html>
   );
 }
