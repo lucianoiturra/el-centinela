@@ -7,6 +7,14 @@ import { getFinanceRituals } from "@/lib/finance";
 import { getCyclePhase } from "@/lib/cycle";
 import { sprintLabel } from "@/lib/sprint";
 import { PHASE_META, bgGradient, fmtRem, getFocus, nowMinutes, phaseOf } from "@/lib/time";
+import {
+  getDayState,
+  getDayChecks,
+  getMonthChain,
+  saveTaa as saveTaaAction,
+  markTaaDone as markTaaDoneAction,
+  setTaskCheck as setTaskCheckAction,
+} from "@/app/actions/day";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -17,10 +25,9 @@ const dk = (d: Date) =>
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const sameDay = (a: Date, b: Date) => dk(a) === dk(b);
 
-// ── localStorage (provisional; Fase 5 lo reemplaza por Postgres) ──
+// localStorage solo para preferencias de sesión (taaskip) — no para datos persistentes
 const lsGet = (k: string) => (typeof window === "undefined" ? null : localStorage.getItem("cent_" + k));
 const lsSet = (k: string, v: string) => typeof window !== "undefined" && localStorage.setItem("cent_" + k, v);
-const lsDel = (k: string) => typeof window !== "undefined" && localStorage.removeItem("cent_" + k);
 
 export default function Sentinel() {
   const [mounted, setMounted] = useState(false);
@@ -28,6 +35,9 @@ export default function Sentinel() {
   const [taa, setTaaState] = useState("");
   const [taaDone, setTaaDone] = useState(false);
   const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [chainData, setChainData] = useState<{ date: string; taa_done: boolean }[]>([]);
+  const [yestHadTaa, setYestHadTaa] = useState(false);
+  const [yestDone, setYestDone] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [gateValue, setGateValue] = useState("");
   const [events] = useState<CalendarEvent[]>([]); // Fase 6: Google Calendar
@@ -44,7 +54,7 @@ export default function Sentinel() {
   const focus = useMemo(() => getFocus(rituals, min, sabbath), [rituals, min, sabbath]);
   const cycle = useMemo(() => getCyclePhase(today), [today]);
 
-  // ── Mount: cargar estado del día ──
+  // ── Mount: reloj ──
   useEffect(() => {
     setMounted(true);
     setNow(new Date());
@@ -52,18 +62,44 @@ export default function Sentinel() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Cargar estado del día desde DB ──
   useEffect(() => {
     if (!mounted) return;
-    setTaaState(lsGet("taa_" + ds) ?? "");
-    setTaaDone(lsGet("won_" + ds) === "1");
-    const c: Record<string, boolean> = {};
-    for (const r of rituals) c[r.id] = lsGet(`task_${ds}_${r.id}`) === "1";
-    setChecks(c);
-    // Compuerta TAA
-    if (!sabbath && !lsGet("taa_" + ds) && lsGet("taaskip_" + ds) !== "1") {
-      setGateOpen(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const yest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+
+    Promise.all([
+      getDayState(today),
+      getDayChecks(today),
+      getMonthChain(daysInMonth),
+      getDayState(yest),
+    ])
+      .then(([dayState, dayChecks, chain, yestState]) => {
+        setTaaState(dayState.taa ?? "");
+        setTaaDone(dayState.taa_done);
+        setChecks(dayChecks);
+        setChainData(chain);
+        setYestHadTaa(!!yestState.taa);
+        setYestDone(yestState.taa_done);
+        // Compuerta TAA: abre si no hay TAA y no se saltó hoy
+        if (!sabbath && !dayState.taa && lsGet("taaskip_" + ds) !== "1") {
+          setGateOpen(true);
+        }
+      })
+      .catch((err) => {
+        console.error("Error cargando estado del día desde DB:", err);
+        // Fallback a localStorage si la sesión expiró o DB no está disponible
+        setTaaState(lsGet("taa_" + ds) ?? "");
+        setTaaDone(lsGet("won_" + ds) === "1");
+        const c: Record<string, boolean> = {};
+        for (const r of rituals) c[r.id] = lsGet(`task_${ds}_${r.id}`) === "1";
+        setChecks(c);
+        if (!sabbath && !lsGet("taa_" + ds) && lsGet("taaskip_" + ds) !== "1") {
+          setGateOpen(true);
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, ds]);
 
   // ── Fondo dinámico ──
@@ -75,35 +111,40 @@ export default function Sentinel() {
     document.body.classList.toggle("night", !sabbath && (min < 360 || min >= 1080));
   }, [min, sabbath, mounted]);
 
+  // ── Acciones (optimistas: UI instantánea, DB en background) ──
+
   const toggleCheck = useCallback(
     (id: string) => {
       const next = !checks[id];
       setChecks((c) => ({ ...c, [id]: next }));
-      if (next) lsSet(`task_${ds}_${id}`, "1");
-      else lsDel(`task_${ds}_${id}`);
+      setTaskCheckAction(today, id, next).catch(console.error);
     },
-    [checks, ds]
+    [checks, today]
   );
 
   const toggleWon = useCallback(() => {
     const next = !taaDone;
     setTaaDone(next);
-    if (next) lsSet("won_" + ds, "1");
-    else lsDel("won_" + ds);
-  }, [taaDone, ds]);
+    // Actualizar la cadena del mes optimísticamente
+    setChainData((prev) => {
+      const existing = prev.findIndex((r) => r.date === ds);
+      if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, taa_done: next } : r));
+      return next ? [...prev, { date: ds, taa_done: true }] : prev;
+    });
+    markTaaDoneAction(today, next).catch(console.error);
+  }, [taaDone, today, ds]);
 
   const saveTaa = useCallback(() => {
     const v = gateValue.trim();
     if (v) {
-      lsSet("taa_" + ds, v);
-      lsDel("taaskip_" + ds);
       setTaaState(v);
+      saveTaaAction(today, v).catch(console.error);
     }
     setGateOpen(false);
-  }, [gateValue, ds]);
+  }, [gateValue, today]);
 
   const skipGate = useCallback(() => {
-    lsSet("taaskip_" + ds, "1");
+    lsSet("taaskip_" + ds, "1"); // preferencia de sesión, no datos
     setGateOpen(false);
   }, [ds]);
 
@@ -137,6 +178,8 @@ export default function Sentinel() {
         cycle={cycle}
         min={min}
         today={today}
+        yestHadTaa={yestHadTaa}
+        yestDone={yestDone}
         onToggleWon={toggleWon}
         onEditTaa={() => openGate(true)}
         onOpenGate={() => openGate(false)}
@@ -144,7 +187,7 @@ export default function Sentinel() {
 
       <Spine rituals={[...rituals, ...eventsToRituals(events)]} checks={checks} min={min} onToggle={toggleCheck} />
 
-      <Chain today={today} />
+      <Chain today={today} chainData={chainData} />
 
       {gateOpen && (
         <div className="gate">
@@ -204,11 +247,13 @@ function Hero(props: {
   cycle: Cycle;
   min: number;
   today: Date;
+  yestHadTaa: boolean;
+  yestDone: boolean;
   onToggleWon: () => void;
   onEditTaa: () => void;
   onOpenGate: () => void;
 }) {
-  const { focus, sabbath, taa, taaDone, cycle, min, today } = props;
+  const { focus, sabbath, taa, taaDone, cycle, min, today, yestHadTaa, yestDone } = props;
   const ph = PHASE_META[phaseOf(min)];
 
   const norte = (
@@ -282,19 +327,28 @@ function Hero(props: {
         </div>
       ) : null)}
 
-      <HeroFoot cycle={cycle} today={today} taaDone={taaDone} />
+      <HeroFoot
+        cycle={cycle}
+        today={today}
+        taaDone={taaDone}
+        yestHadTaa={yestHadTaa}
+        yestDone={yestDone}
+      />
     </div>
   );
 }
 
-function HeroFoot({ cycle, today, taaDone }: { cycle: Cycle; today: Date; taaDone: boolean }) {
-  // Vicblaz: ¿ayer (día laboral) quedó sin cerrar?
+function HeroFoot({
+  cycle, today, taaDone, yestHadTaa, yestDone,
+}: {
+  cycle: Cycle;
+  today: Date;
+  taaDone: boolean;
+  yestHadTaa: boolean;
+  yestDone: boolean;
+}) {
   const yest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  const yestLost =
-    yest.getDay() !== 6 &&
-    typeof window !== "undefined" &&
-    !!lsGet("taa_" + dk(yest)) &&
-    lsGet("won_" + dk(yest)) !== "1";
+  const yestLost = yest.getDay() !== 6 && yestHadTaa && !yestDone;
 
   if (!cycle && !yestLost) return null;
   return (
@@ -358,19 +412,24 @@ function Spine({
 }
 
 // ════════════════ CHAIN (mes actual) ════════════════
-function Chain({ today }: { today: Date }) {
+function Chain({ today, chainData }: { today: Date; chainData: { date: string; taa_done: boolean }[] }) {
   const year = today.getFullYear();
   const month = today.getMonth();
   const days = new Date(year, month + 1, 0).getDate();
+
+  // Mapa rápido de fecha → taa_done
+  const wonMap = new Map(chainData.map((r) => [r.date, r.taa_done]));
+
   const cells: { d: number; status: string; cyc: string | null }[] = [];
   let won = 0;
   for (let d = 1; d <= days; d++) {
     const date = new Date(year, month, d);
+    const dateKey = dk(date);
     let status: string;
     if (date.getDay() === 6) status = "sabbath";
     else if (date > today) status = "future";
     else if (sameDay(date, today)) status = "today";
-    else status = lsGet("won_" + dk(date)) === "1" ? "won" : "lost";
+    else status = wonMap.get(dateKey) === true ? "won" : "lost";
     if (status === "won") won++;
     const cyc = getCyclePhase(date);
     cells.push({ d, status, cyc: cyc ? cyc.color : null });

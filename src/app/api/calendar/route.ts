@@ -54,9 +54,9 @@ export async function GET() {
     // Normalizar al formato CalendarEvent de la app
     const events = (data.items ?? []).map((item: GoogleCalendarItem) => ({
       id: item.id,
-      title: item.summary ?? "(sin título)",
-      start: item.start?.dateTime ?? item.start?.date ?? "",
-      end: item.end?.dateTime ?? item.end?.date ?? "",
+      summary: item.summary ?? "(sin título)",
+      startISO: item.start?.dateTime ?? item.start?.date ?? "",
+      endISO: item.end?.dateTime ?? item.end?.date ?? "",
       allDay: !item.start?.dateTime,
       color: item.colorId ? GCAL_COLORS[item.colorId] : undefined,
     }));
