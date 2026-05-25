@@ -43,24 +43,31 @@ export async function markTaaDone(date: Date, done: boolean) {
 export async function getDayState(date: Date) {
   const userId = await getUserId();
   const d = fmtDate(date);
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT taa, taa_done FROM day_state
     WHERE user_id = ${userId} AND date = ${d}
     LIMIT 1
   `;
-  return rows[0] ?? { taa: null, taa_done: false };
+  const row = rows[0];
+  return {
+    taa: (row?.taa as string | undefined) ?? null,
+    taa_done: (row?.taa_done as boolean | undefined) ?? false,
+  };
 }
 
 // Últimos N días para la cadena del mes
 export async function getMonthChain(days: number = 30) {
   const userId = await getUserId();
-  const { rows } = await sql`
-    SELECT date, taa_done FROM day_state
+  const rows = await sql`
+    SELECT date::text as date, taa_done FROM day_state
     WHERE user_id = ${userId}
-      AND date >= CURRENT_DATE - INTERVAL '${days} days'
+      AND date >= CURRENT_DATE - (${days} || ' days')::interval
     ORDER BY date ASC
   `;
-  return rows.map((r) => ({ date: r.date as string, taa_done: r.taa_done as boolean }));
+  return rows.map((r) => ({
+    date: r.date as string,
+    taa_done: r.taa_done as boolean,
+  }));
 }
 
 // ─── TASK CHECKS ──────────────────────────────────────────────────────────────
@@ -80,11 +87,13 @@ export async function setTaskCheck(date: Date, taskId: string, checked: boolean)
 export async function getDayChecks(date: Date): Promise<Record<string, boolean>> {
   const userId = await getUserId();
   const d = fmtDate(date);
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT task_id, checked FROM task_check
     WHERE user_id = ${userId} AND date = ${d}
   `;
-  return Object.fromEntries(rows.map((r) => [r.task_id, r.checked]));
+  return Object.fromEntries(
+    rows.map((r) => [r.task_id as string, r.checked as boolean])
+  );
 }
 
 // ─── SPRINT COMMITMENTS ───────────────────────────────────────────────────────
@@ -107,12 +116,15 @@ export async function saveSprintCommitment(
 
 export async function getSprintCommitments(isoYear: number, isoWeek: number) {
   const userId = await getUserId();
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT slot, text FROM sprint_commitment
     WHERE user_id = ${userId} AND iso_year = ${isoYear} AND iso_week = ${isoWeek}
     ORDER BY slot
   `;
-  return rows.map((r) => ({ slot: r.slot as number, text: r.text as string }));
+  return rows.map((r) => ({
+    slot: r.slot as number,
+    text: r.text as string,
+  }));
 }
 
 // ─── CICLO DE MICHELLE ────────────────────────────────────────────────────────
@@ -130,7 +142,7 @@ export async function saveCycleStart(cycleStartDate: Date, cycleLength: number =
 
 export async function getLatestCycleStart(): Promise<{ date: string; length: number } | null> {
   const userId = await getUserId();
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT cycle_start_date::text as date, cycle_length as length
     FROM cycle_log
     WHERE user_id = ${userId}
@@ -138,5 +150,8 @@ export async function getLatestCycleStart(): Promise<{ date: string; length: num
     LIMIT 1
   `;
   if (!rows[0]) return null;
-  return { date: rows[0].date as string, length: rows[0].length as number };
+  return {
+    date: rows[0].date as string,
+    length: rows[0].length as number,
+  };
 }
