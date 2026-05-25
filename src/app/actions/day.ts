@@ -10,8 +10,12 @@ function fmtDate(d: Date): string {
 
 async function getUserId(): Promise<string> {
   const session = await auth();
-  if (!session?.user?.email) throw new Error("No autenticado");
-  return session.user.email;
+  if (session?.user?.email) return session.user.email;
+  // Fallback de desarrollo local: permite probar sin pasar por Google OAuth
+  if (process.env.NODE_ENV === "development") {
+    return "luciano.iturra.c@gmail.com";
+  }
+  throw new Error("No autenticado");
 }
 
 // ─── TAA ──────────────────────────────────────────────────────────────────────
