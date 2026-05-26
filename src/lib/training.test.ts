@@ -29,12 +29,12 @@ describe("calculatePhaseNumber", () => {
   });
   it("Exactamente en el inicio del taper (21 días antes)", () => {
     const taperStart = new Date(RACE);
-    taperStart.setDate(taperStart.getDate() - 21);
+    taperStart.setUTCDate(taperStart.getUTCDate() - 21);
     expect(calculatePhaseNumber(START, taperStart, RACE)).toBe(4);
   });
   it("Un día antes del taper sigue en Fase 3", () => {
     const beforeTaper = new Date(RACE);
-    beforeTaper.setDate(beforeTaper.getDate() - 22);
+    beforeTaper.setUTCDate(beforeTaper.getUTCDate() - 22);
     expect(calculatePhaseNumber(START, beforeTaper, RACE)).toBe(3);
   });
 });
