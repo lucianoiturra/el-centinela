@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase } from "@/lib/types";
-import { DEFAULT_ROUTINE, getRoutineRituals, isSabbath } from "@/lib/rituals";
+import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase, RoutineRitual } from "@/lib/types";
+import { getRoutineRituals, isSabbath } from "@/lib/rituals";
 import { getFinanceRituals } from "@/lib/finance";
+import { getRoutine } from "@/app/actions/routine";
 import { getCyclePhase } from "@/lib/cycle";
 import { sprintLabel } from "@/lib/sprint";
 import { PHASE_META, bgGradient, fmtRem, getFocus, nowMinutes, phaseOf } from "@/lib/time";
@@ -45,6 +46,7 @@ export default function Sentinel() {
   const { status } = useSession();
   // Estado del puente con Google Calendar: si necesitamos reautenticar mostramos el aviso.
   const [calReauth, setCalReauth] = useState(false);
+  const [routine, setRoutine] = useState<RoutineRitual[] | null>(null);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -52,8 +54,11 @@ export default function Sentinel() {
   const min = nowMinutes(now);
 
   const rituals: Ritual[] = useMemo(
-    () => [...getRoutineRituals(today, DEFAULT_ROUTINE), ...getFinanceRituals(today)],
-    [today]
+    () => [
+      ...(routine ? getRoutineRituals(today, routine) : []),
+      ...getFinanceRituals(today),
+    ],
+    [today, routine]
   );
   const focus = useMemo(() => getFocus(rituals, min, sabbath), [rituals, min, sabbath]);
   const cycle = useMemo(() => getCyclePhase(today), [today]);
@@ -128,6 +133,16 @@ export default function Sentinel() {
       cancelled = true;
     };
   }, [status]);
+
+  // ── Rutina del usuario (DB) ──
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    getRoutine()
+      .then((r) => { if (!cancelled) setRoutine(r); })
+      .catch((e) => { if (!cancelled) { console.error("Error cargando rutina:", e); setRoutine([]); } });
+    return () => { cancelled = true; };
+  }, [mounted]);
 
   // ── Fondo dinámico ──
   useEffect(() => {
@@ -212,15 +227,19 @@ export default function Sentinel() {
         onOpenGate={() => openGate(false)}
       />
 
-      <Spine
-        rituals={[...rituals, ...eventsToRituals(events)]}
-        checks={checks}
-        min={min}
-        onToggle={toggleCheck}
-        showConnect={status !== "authenticated" || calReauth}
-        connectLabel={calReauth ? "Reconectar calendario" : "Conectar calendario"}
-        onConnect={() => signIn("google", { callbackUrl: "/" })}
-      />
+      {routine === null ? (
+        <div className="spine"><div className="spine-title">La espina de hoy</div><div className="node" style={{ opacity: .4 }}>Cargando rutina…</div></div>
+      ) : (
+        <Spine
+          rituals={[...rituals, ...eventsToRituals(events)]}
+          checks={checks}
+          min={min}
+          onToggle={toggleCheck}
+          showConnect={status !== "authenticated" || calReauth}
+          connectLabel={calReauth ? "Reconectar calendario" : "Conectar calendario"}
+          onConnect={() => signIn("google", { callbackUrl: "/" })}
+        />
+      )}
 
       <Chain today={today} chainData={chainData} />
 
