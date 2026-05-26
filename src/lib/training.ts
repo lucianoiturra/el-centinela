@@ -39,5 +39,5 @@ export function jsDayToPlanDay(jsDay: number): number {
  * Sábado = Sábado Santo — nunca hay entrenamiento.
  */
 export function isSabbathDay(today: Date): boolean {
-  return today.getDay() === 5;
+  return today.getUTCDay() === 6;
 }
