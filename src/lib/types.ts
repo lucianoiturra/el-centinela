@@ -78,3 +78,59 @@ export const PILLAR_COLORS: Record<Pillar, string> = {
   pareja: "#f9a8d4",
   hogar: "#7dd3fc",
 };
+
+// ─── Entrenamiento Ciclismo ───────────────────────────────────────────────────
+
+export interface TrainingPhase {
+  id: number;
+  planId: number;
+  phaseNumber: 1 | 2 | 3 | 4;
+  name: string;
+  description: string | null;
+  startMonth: number;
+  endMonth: number;
+  bikeKmWeekMin: number | null;
+  bikeKmWeekMax: number | null;
+  weightsDaysPerWeek: number | null;
+}
+
+export interface TrainingSessionTemplate {
+  id: number;
+  phaseId: number;
+  dayOfWeek: number; // 1=Lun … 7=Dom (6=Sáb nunca tiene sesión)
+  activityType: "bike" | "weights" | "rest";
+  title: string;
+  description: string | null;
+  durationMin: number | null;
+  intensity: "low" | "moderate" | "high" | "very_high" | "rest" | null;
+  levelMin: number | null;
+  levelMax: number | null;
+  rpmMin: number | null;
+  rpmMax: number | null;
+  wattsRef: string | null;
+  routineLabel: "A" | "B" | "A_reducida" | "B_reducida" | null;
+}
+
+export interface TrainingExercise {
+  id: number;
+  sessionTemplateId: number;
+  sortOrder: number;
+  name: string;
+  sets: number;
+  repsLabel: string;
+  restSeconds: number | null;
+  muscleGroup: string | null;
+  notes: string | null;
+}
+
+export interface TrainingSetLog {
+  id: number;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  exerciseId: number;
+  setNumber: number;
+  weightKg: number | null;
+  repsCompleted: number | null;
+  durationSeconds: number | null;
+  notes: string | null;
+}
