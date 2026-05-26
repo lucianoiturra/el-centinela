@@ -33,7 +33,7 @@ export async function getDayState(date: Date) {
   const userId = await getUserId();
   const d = fmtDate(date);
   const rows = await sql`
-    SELECT taa, taa_done FROM day_state
+    SELECT taa, taa_done, linea_espiritual FROM day_state
     WHERE user_id = ${userId} AND date = ${d}
     LIMIT 1
   `;
@@ -41,7 +41,35 @@ export async function getDayState(date: Date) {
   return {
     taa: (row?.taa as string | undefined) ?? null,
     taa_done: (row?.taa_done as boolean | undefined) ?? false,
+    linea: (row?.linea_espiritual as string | undefined) ?? "",
   };
+}
+
+// ─── LÍNEA ESPIRITUAL (cierre) ──────────────────────────────────────────────────
+
+export async function saveLineaEspiritual(date: Date, text: string) {
+  const userId = await getUserId();
+  const d = fmtDate(date);
+  await sql`
+    INSERT INTO day_state (user_id, date, linea_espiritual, updated_at)
+    VALUES (${userId}, ${d}, ${text}, NOW())
+    ON CONFLICT (user_id, date)
+    DO UPDATE SET linea_espiritual = EXCLUDED.linea_espiritual, updated_at = NOW()
+  `;
+  revalidatePath("/");
+}
+
+export async function getDiario() {
+  const userId = await getUserId();
+  const rows = await sql`
+    SELECT date::text as date, linea_espiritual FROM day_state
+    WHERE user_id = ${userId} AND linea_espiritual IS NOT NULL AND linea_espiritual <> ''
+    ORDER BY date DESC
+  `;
+  return rows.map((r) => ({
+    date: r.date as string,
+    linea: r.linea_espiritual as string,
+  }));
 }
 
 // Últimos N días para la cadena del mes
