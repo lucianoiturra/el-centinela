@@ -20,6 +20,11 @@ function emptyRitual(sortOrder: number): RoutineRitual {
 export default function MiRutina() {
   const [rituals, setRituals] = useState<RoutineRitual[] | null>(null);
   const [draft, setDraft] = useState<RoutineRitual | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const showFlash = (msg: string) => {
+    setFlash(msg);
+    setTimeout(() => setFlash(null), 2200);
+  };
 
   const reload = () => getRoutine().then(setRituals).catch((e) => { console.error(e); setRituals([]); });
   useEffect(() => { reload(); }, []);
@@ -28,17 +33,20 @@ export default function MiRutina() {
     await upsertRitual(r);
     setDraft(null);
     await reload();
+    showFlash("✓ Guardado");
   };
   const remove = async (id: string) => {
     if (!confirm("¿Borrar este ritual?")) return;
     await deleteRitual(id);
     await reload();
+    showFlash("✓ Borrado");
   };
 
   if (rituals === null) return <div className="config-soon">Cargando…</div>;
 
   return (
     <div className="rutina">
+      {flash && <div className="rutina-flash">{flash}</div>}
       {rituals.map((r) => (
         <RitualEditor key={r.id} value={r} onSave={save} onDelete={() => remove(r.id)} />
       ))}
