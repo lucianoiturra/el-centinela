@@ -4,6 +4,7 @@ import Link from "next/link";
 import MiRutina from "./MiRutina";
 import VistaMensual from "./VistaMensual";
 import CicloConfig from "./CicloConfig";
+import Diario from "./Diario";
 
 type Tab = "rutina" | "ciclo" | "mensual" | "diario";
 
@@ -25,7 +26,7 @@ export default function ConfigShell() {
         {tab === "rutina" && <MiRutina />}
         {tab === "mensual" && <VistaMensual />}
         {tab === "ciclo" && <CicloConfig />}
-        {tab === "diario" && <div className="config-soon">Próximamente.</div>}
+        {tab === "diario" && <Diario />}
       </div>
     </div>
   );
