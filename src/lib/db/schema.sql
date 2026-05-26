@@ -3,12 +3,13 @@
 
 -- Estado diario (TAA + Día Ganado por fecha)
 CREATE TABLE IF NOT EXISTS day_state (
-  user_id    TEXT        NOT NULL,
-  date       DATE        NOT NULL,          -- YYYY-MM-DD local
-  taa        TEXT,                          -- texto libre de la TAA del día
-  taa_done   BOOLEAN     NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  user_id          TEXT        NOT NULL,
+  date             DATE        NOT NULL,          -- YYYY-MM-DD local
+  taa              TEXT,                          -- texto libre de la TAA del día
+  taa_done         BOOLEAN     NOT NULL DEFAULT FALSE,
+  linea_espiritual TEXT,                          -- línea espiritual del cierre, por fecha
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, date)
 );
 
@@ -22,13 +23,26 @@ CREATE TABLE IF NOT EXISTS task_check (
   PRIMARY KEY (user_id, date, task_id)
 );
 
--- Rutina personalizada por día de semana (override del DEFAULT_ROUTINE)
-CREATE TABLE IF NOT EXISTS routine_config (
-  user_id    TEXT        NOT NULL,
-  dow        SMALLINT    NOT NULL,          -- 0=Dom .. 6=Sáb
-  rituals    JSONB       NOT NULL,          -- array de Ritual[]
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (user_id, dow)
+-- Rutina editable por ritual (días de semana + cada N semanas). Reemplaza routine_config.
+CREATE TABLE IF NOT EXISTS routine_ritual (
+  user_id        TEXT        NOT NULL,
+  id             TEXT        NOT NULL,          -- estable; ids semilla (higiene…) o cust-<rand>
+  label          TEXT        NOT NULL,
+  icon           TEXT        NOT NULL,
+  pillar         TEXT        NOT NULL,
+  phase          TEXT        NOT NULL,          -- 'manana' | 'tarde' | 'noche'
+  start_min      SMALLINT,
+  end_min        SMALLINT,
+  time           TEXT,
+  hard           BOOLEAN     NOT NULL DEFAULT FALSE,
+  optional       BOOLEAN     NOT NULL DEFAULT FALSE,
+  is_taa         BOOLEAN     NOT NULL DEFAULT FALSE,
+  days           SMALLINT[]  NOT NULL,          -- {0=Dom .. 6=Sáb}
+  interval_weeks SMALLINT    NOT NULL DEFAULT 1,
+  anchor_date    DATE        NOT NULL DEFAULT CURRENT_DATE,
+  sort_order     SMALLINT    NOT NULL DEFAULT 0,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
 );
 
 -- Compromisos de sprint (3 por semana)
