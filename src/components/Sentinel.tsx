@@ -17,6 +17,7 @@ import {
   saveTaa as saveTaaAction,
   markTaaDone as markTaaDoneAction,
   setTaskCheck as setTaskCheckAction,
+  getLatestCycleStart,
 } from "@/app/actions/day";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -48,6 +49,7 @@ export default function Sentinel() {
   // Estado del puente con Google Calendar: si necesitamos reautenticar mostramos el aviso.
   const [calReauth, setCalReauth] = useState(false);
   const [routine, setRoutine] = useState<RoutineRitual[] | null>(null);
+  const [cycleInfo, setCycleInfo] = useState<{ date: string; length: number } | null>(null);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -62,7 +64,13 @@ export default function Sentinel() {
     [today, routine]
   );
   const focus = useMemo(() => getFocus(rituals, min, sabbath), [rituals, min, sabbath]);
-  const cycle = useMemo(() => getCyclePhase(today), [today]);
+  const cycle = useMemo(
+    () =>
+      cycleInfo
+        ? getCyclePhase(today, new Date(cycleInfo.date + "T00:00:00"), cycleInfo.length)
+        : getCyclePhase(today),
+    [today, cycleInfo]
+  );
 
   // ── Mount: reloj ──
   useEffect(() => {
@@ -142,6 +150,16 @@ export default function Sentinel() {
     getRoutine()
       .then((r) => { if (!cancelled) setRoutine(r); })
       .catch((e) => { if (!cancelled) { console.error("Error cargando rutina:", e); setRoutine([]); } });
+    return () => { cancelled = true; };
+  }, [mounted]);
+
+  // ── Ciclo de Michelle (DB) ──
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    getLatestCycleStart()
+      .then((info) => { if (!cancelled) setCycleInfo(info); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [mounted]);
 
