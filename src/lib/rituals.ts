@@ -1,4 +1,5 @@
-import { Ritual } from "./types";
+import { Ritual, RoutineRitual } from "./types";
+import { ritualAppliesOn } from "./routine-rules";
 
 /**
  * Plantilla de rutina semanal POR DEFECTO (sembrada).
@@ -69,10 +70,31 @@ export function isSabbath(date: Date): boolean {
   return date.getDay() === 6;
 }
 
-/** Rituales fijos de una fecha, desde la plantilla (o una custom). */
-export function getRoutineRituals(
-  date: Date,
-  routine: Record<number, Ritual[]> = DEFAULT_ROUTINE
-): Ritual[] {
-  return (routine[date.getDay()] ?? []).map((r) => ({ ...r, source: "routine" as const }));
+/** Invierte DEFAULT_ROUTINE (por día) a filas por ritual (semilla inicial). */
+export function seedRowsFromDefault(todayISO: string): RoutineRitual[] {
+  const map = new Map<string, RoutineRitual>();
+  let order = 0;
+  for (let dow = 0; dow < 7; dow++) {
+    for (const r of DEFAULT_ROUTINE[dow] ?? []) {
+      const existing = map.get(r.id);
+      if (existing) {
+        if (!existing.days.includes(dow)) existing.days.push(dow);
+        continue;
+      }
+      map.set(r.id, {
+        id: r.id, label: r.label, icon: r.icon, pillar: r.pillar, phase: r.phase,
+        startMin: r.startMin, endMin: r.endMin, time: r.time,
+        hard: !!r.hard, optional: !!r.optional, isTaa: !!r.isTaa,
+        days: [dow], intervalWeeks: 1, anchorISO: todayISO, sortOrder: order++,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+/** Rituales que aplican en `date` desde la rutina del usuario. */
+export function getRoutineRituals(date: Date, rituals: RoutineRitual[]): Ritual[] {
+  return rituals
+    .filter((r) => ritualAppliesOn(r, date))
+    .map((r) => ({ ...r, source: "routine" as const }));
 }
