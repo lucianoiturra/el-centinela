@@ -134,7 +134,7 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .rutina{ display:flex; flex-direction:column; gap:12px; }
 .rit-card{ border:1px solid var(--panel-bd); background:var(--panel); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; }
 .rit-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.rit-card input, .rit-card select{ background:rgba(255,255,255,.05); border:1px solid var(--panel-bd); color:#e6e9f5; border-radius:8px; padding:6px 8px; font-size:.85rem; }
+.rit-card input, .rit-card select{ background:rgba(255,255,255,.05); border:1px solid var(--panel-bd); color:var(--ink); border-radius:8px; padding:6px 8px; font-size:.85rem; }
 .rit-icon{ width:42px; text-align:center; }
 .rit-label{ flex:1; min-width:140px; }
 .rit-time{ width:120px; }
