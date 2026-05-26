@@ -261,7 +261,7 @@ export default function Sentinel() {
         />
       )}
 
-      <Chain today={today} chainData={chainData} />
+      <Chain today={today} chainData={chainData} cycleInfo={cycleInfo} />
 
       {gateOpen && (
         <div className="gate">
@@ -506,10 +506,11 @@ function Spine({
 }
 
 // ════════════════ CHAIN (mes actual) ════════════════
-function Chain({ today, chainData }: { today: Date; chainData: { date: string; taa_done: boolean }[] }) {
+function Chain({ today, chainData, cycleInfo }: { today: Date; chainData: { date: string; taa_done: boolean }[]; cycleInfo: { date: string; length: number } | null }) {
   const year = today.getFullYear();
   const month = today.getMonth();
   const days = new Date(year, month + 1, 0).getDate();
+  const cycleStart = cycleInfo ? new Date(cycleInfo.date + "T00:00:00") : undefined;
 
   // Mapa rápido de fecha → taa_done
   const wonMap = new Map(chainData.map((r) => [r.date, r.taa_done]));
@@ -525,7 +526,7 @@ function Chain({ today, chainData }: { today: Date; chainData: { date: string; t
     else if (sameDay(date, today)) status = "today";
     else status = wonMap.get(dateKey) === true ? "won" : "lost";
     if (status === "won") won++;
-    const cyc = getCyclePhase(date);
+    const cyc = getCyclePhase(date, cycleStart, cycleInfo?.length);
     cells.push({ d, status, cyc: cyc ? cyc.color : null });
   }
   const label = (s: string) => (s === "won" ? "✓" : s === "lost" ? "✗" : s === "sabbath" ? "✡" : s === "today" ? "●" : "");
