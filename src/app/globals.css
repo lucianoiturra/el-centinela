@@ -202,3 +202,33 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .dd-node.done{ color:var(--ink-dim); text-decoration:line-through; }
 .dd-box{ width:18px; height:18px; flex-shrink:0; border-radius:5px; border:2px solid var(--ink-dim); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
 .dd-node.done .dd-box{ background:var(--salud); border-color:var(--salud); color:#03241f; }
+
+/* ─── TrainingCard ─────────────────────────────────────────────────────────── */
+.training-card{ margin-top:22px; border:1px solid var(--panel-bd); background:var(--panel); border-radius:16px; padding:20px; backdrop-filter:blur(8px); }
+.training-card.done{ border-color:rgba(45,212,191,.4); box-shadow:0 0 40px -14px rgba(45,212,191,.3); }
+.training-card.rest{ border-color:rgba(167,139,250,.25); }
+.training-label{ font-size:.7rem; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-dim); font-weight:600; margin-bottom:14px; }
+.training-title{ font-size:1.05rem; color:#fff; font-weight:600; line-height:1.3; }
+.training-meta{ font-size:.82rem; color:var(--ink-dim); margin-top:5px; line-height:1.4; }
+.training-params{ font-size:.8rem; color:var(--cab); margin-top:6px; font-family:ui-monospace,Menlo,monospace; letter-spacing:.02em; }
+.training-expand{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:.82rem; margin-top:12px; text-decoration:underline; text-underline-offset:3px; font-family:inherit; padding:0; display:block; }
+.training-expand:hover{ color:var(--ink); }
+.training-exercises{ margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+.training-ex{ border:1px solid var(--panel-bd); border-radius:10px; padding:12px; transition:opacity .15s; }
+.training-ex.checked{ opacity:.5; }
+.training-ex-head{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+.training-ex-check{ width:18px; height:18px; border-radius:5px; border:2px solid var(--ink-dim); flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; transition:all .15s; }
+.training-ex-check.on{ background:var(--salud); border-color:var(--salud); color:#03241f; }
+.training-ex-name{ font-size:.88rem; font-weight:500; line-height:1.3; }
+.training-ex-detail{ font-size:.72rem; color:var(--ink-dim); margin-top:2px; }
+.training-ex-inputs{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; align-items:flex-end; }
+.training-ex-field{ display:flex; flex-direction:column; gap:3px; }
+.training-ex-field label{ font-size:.6rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); }
+.training-ex-field input{ width:80px; background:rgba(255,255,255,.05); border:1px solid var(--panel-bd); color:var(--ink); border-radius:7px; padding:5px 8px; font-size:.85rem; font-family:inherit; outline:none; transition:border-color .15s; }
+.training-ex-field input:focus{ border-color:var(--cab); }
+.training-ex-prev{ font-size:.66rem; color:var(--ink-faint); margin-top:4px; font-style:italic; }
+.training-done-btn{ margin-top:16px; width:100%; background:rgba(45,212,191,.1); color:var(--salud); border:1px solid rgba(45,212,191,.28); border-radius:10px; padding:11px; cursor:pointer; font-weight:700; font-size:.88rem; transition:all .18s; font-family:inherit; }
+.training-done-btn:hover{ background:rgba(45,212,191,.18); }
+.training-done-btn.on{ background:rgba(45,212,191,.2); border-color:var(--salud); }
+.training-badge{ display:flex; align-items:center; gap:8px; font-size:.9rem; color:var(--salud); margin-top:12px; }
+.training-badge-undo{ background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:.72rem; text-decoration:underline; text-underline-offset:2px; font-family:inherit; margin-left:auto; }
