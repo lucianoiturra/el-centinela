@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase, RoutineRitual } from "@/lib/types";
@@ -18,6 +18,7 @@ import {
   markTaaDone as markTaaDoneAction,
   setTaskCheck as setTaskCheckAction,
   getLatestCycleStart,
+  saveLineaEspiritual as saveLineaAction,
 } from "@/app/actions/day";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -50,6 +51,7 @@ export default function Sentinel() {
   const [calReauth, setCalReauth] = useState(false);
   const [routine, setRoutine] = useState<RoutineRitual[] | null>(null);
   const [cycleInfo, setCycleInfo] = useState<{ date: string; length: number } | null>(null);
+  const [linea, setLinea] = useState("");
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -96,6 +98,7 @@ export default function Sentinel() {
       .then(([dayState, dayChecks, chain, yestState]) => {
         setTaaState(dayState.taa ?? "");
         setTaaDone(dayState.taa_done);
+        setLinea(dayState.linea ?? "");
         setChecks(dayChecks);
         setChainData(chain);
         setYestHadTaa(!!yestState.taa);
@@ -183,6 +186,14 @@ export default function Sentinel() {
     [checks, today]
   );
 
+  const saveLinea = useCallback(
+    (text: string) => {
+      setLinea(text);
+      saveLineaAction(today, text).catch(console.error);
+    },
+    [today]
+  );
+
   const toggleWon = useCallback(() => {
     const next = !taaDone;
     setTaaDone(next);
@@ -258,6 +269,8 @@ export default function Sentinel() {
           showConnect={status !== "authenticated" || calReauth}
           connectLabel={calReauth ? "Reconectar calendario" : "Conectar calendario"}
           onConnect={() => signIn("google", { callbackUrl: "/" })}
+          lineaValue={linea}
+          onLineaSave={saveLinea}
         />
       )}
 
@@ -446,9 +459,35 @@ function HeroFoot({
   );
 }
 
+// Campo para anotar la "1 línea espiritual" del cierre (se guarda al salir del campo)
+function CierreLinea({ value, onSave }: { value: string; onSave: (t: string) => void }) {
+  const [text, setText] = useState(value);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setText(value); }, [value]);
+  const save = () => {
+    if (text.trim() === value.trim()) return;
+    onSave(text.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  return (
+    <div className="linea" onClick={(e) => e.stopPropagation()}>
+      <textarea
+        className="linea-input"
+        rows={2}
+        placeholder="Tu línea espiritual de hoy…"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+      />
+      {saved && <span className="linea-saved">✓ guardado</span>}
+    </div>
+  );
+}
+
 // ════════════════ SPINE ════════════════
 function Spine({
-  rituals, checks, min, onToggle, showConnect, connectLabel, onConnect,
+  rituals, checks, min, onToggle, showConnect, connectLabel, onConnect, lineaValue, onLineaSave,
 }: {
   rituals: Ritual[];
   checks: Record<string, boolean>;
@@ -457,6 +496,8 @@ function Spine({
   showConnect: boolean;
   connectLabel: string;
   onConnect: () => void;
+  lineaValue: string;
+  onLineaSave: (t: string) => void;
 }) {
   const order: RitualPhase[] = ["manana", "tarde", "noche"];
   const curPhase = phaseOf(min);
@@ -482,20 +523,22 @@ function Spine({
             {items.map((r) => {
               const done = !!checks[r.id];
               return (
-                <div
-                  key={r.id}
-                  className={`node${done ? " done" : ""}${r.hard ? " hard" : ""}${r.optional ? " opt" : ""}`}
-                  onClick={() => onToggle(r.id)}
-                >
-                  <div className="node-box">{done ? "✓" : ""}</div>
-                  <div className="node-t">
-                    <span className="acc" style={{ background: PILLAR_COLORS[r.pillar] }} />
-                    {r.icon} {r.label}
-                    {r.time && <span className="node-time">{r.time}</span>}
-                    {r.source === "calendar" && <span className="tag calendar">calendar</span>}
-                    {r.source === "finance" && <span className="tag finanzas">finanzas</span>}
+                <Fragment key={r.id}>
+                  <div
+                    className={`node${done ? " done" : ""}${r.hard ? " hard" : ""}${r.optional ? " opt" : ""}`}
+                    onClick={() => onToggle(r.id)}
+                  >
+                    <div className="node-box">{done ? "✓" : ""}</div>
+                    <div className="node-t">
+                      <span className="acc" style={{ background: PILLAR_COLORS[r.pillar] }} />
+                      {r.icon} {r.label}
+                      {r.time && <span className="node-time">{r.time}</span>}
+                      {r.source === "calendar" && <span className="tag calendar">calendar</span>}
+                      {r.source === "finance" && <span className="tag finanzas">finanzas</span>}
+                    </div>
                   </div>
-                </div>
+                  {r.id === "cierre" && <CierreLinea value={lineaValue} onSave={onLineaSave} />}
+                </Fragment>
               );
             })}
           </div>
