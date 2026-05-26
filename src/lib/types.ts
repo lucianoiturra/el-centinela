@@ -40,6 +40,25 @@ export interface CalendarEvent {
   allDay: boolean;
 }
 
+/** Ritual configurable por el usuario (persistido en routine_ritual). */
+export interface RoutineRitual {
+  id: string;
+  label: string;
+  icon: string;
+  pillar: Pillar;
+  phase: RitualPhase;
+  startMin?: number;
+  endMin?: number;
+  time?: string;
+  hard: boolean;
+  optional: boolean;
+  isTaa: boolean;
+  days: number[];        // 0=Dom .. 6=Sáb
+  intervalWeeks: number; // >= 1 ("cada N semanas")
+  anchorISO: string;     // YYYY-MM-DD, semana de referencia
+  sortOrder: number;
+}
+
 export interface CyclePhaseInfo {
   id: "menstruacion" | "folicular" | "ovulacion" | "lutea";
   name: string;
