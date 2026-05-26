@@ -1,22 +1,7 @@
 "use server";
 import { sql } from "@/lib/db/client";
-import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
-
-// Helpers
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-async function getUserId(): Promise<string> {
-  const session = await auth();
-  if (session?.user?.email) return session.user.email;
-  // Fallback de desarrollo local: permite probar sin pasar por Google OAuth
-  if (process.env.NODE_ENV === "development") {
-    return "luciano.iturra.c@gmail.com";
-  }
-  throw new Error("No autenticado");
-}
+import { getUserId, fmtDate } from "@/lib/server-user";
 
 // ─── TAA ──────────────────────────────────────────────────────────────────────
 
