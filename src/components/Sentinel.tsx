@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase, RoutineRitual } from "@/lib/types";
 import { getRoutineRituals, isSabbath } from "@/lib/rituals";
@@ -210,6 +211,7 @@ export default function Sentinel() {
           {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
           <span className="date">{DSHORT[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</span>
         </div>
+        <Link href="/configuracion" className="gear" aria-label="Configuración">⚙</Link>
       </div>
 
       <Hero

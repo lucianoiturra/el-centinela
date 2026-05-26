@@ -121,3 +121,30 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .gate-skip{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:.82rem; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
 
 @media(max-width:520px){ .hero-focus{font-size:1.6rem} .taa-text{font-size:1.4rem} .gate-q{font-size:1.55rem} }
+
+.back{ color:var(--ink-dim); text-decoration:none; font-size:.85rem; }
+.gear{ margin-left:auto; color:var(--ink-dim); text-decoration:none; font-size:1.1rem; opacity:.55; transition:opacity .15s; }
+.gear:hover{ opacity:1; }
+.config-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:18px 0; }
+.config-tabs button{ font-size:.72rem; letter-spacing:.06em; padding:6px 12px; border-radius:999px; cursor:pointer; background:var(--panel); border:1px solid var(--panel-bd); color:var(--ink-dim); }
+.config-tabs button.on{ color:var(--gold); border-color:var(--gold); }
+.config-body{ margin-bottom:40px; }
+.config-soon{ opacity:.4; font-size:.85rem; padding:20px 0; }
+
+.rutina{ display:flex; flex-direction:column; gap:12px; }
+.rit-card{ border:1px solid var(--panel-bd); background:var(--panel); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; }
+.rit-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.rit-card input, .rit-card select{ background:rgba(255,255,255,.05); border:1px solid var(--panel-bd); color:#e6e9f5; border-radius:8px; padding:6px 8px; font-size:.85rem; }
+.rit-icon{ width:42px; text-align:center; }
+.rit-label{ flex:1; min-width:140px; }
+.rit-time{ width:120px; }
+.rit-days{ display:flex; gap:5px; }
+.rit-days button{ width:30px; height:30px; border-radius:8px; border:1px solid var(--panel-bd); background:rgba(255,255,255,.04); color:var(--ink-dim); cursor:pointer; font-size:.72rem; font-weight:700; }
+.rit-days button.on{ background:rgba(147,197,253,.18); color:var(--cab); border-color:rgba(147,197,253,.4); }
+.rit-interval, .rit-anchor{ display:inline-flex; align-items:center; gap:6px; font-size:.78rem; color:var(--ink-dim); }
+.rit-interval input{ width:54px; }
+.rit-actions{ display:flex; gap:8px; justify-content:flex-end; }
+.rit-save{ background:rgba(245,185,66,.15); color:var(--gold); border:1px solid rgba(245,185,66,.4); border-radius:8px; padding:6px 14px; cursor:pointer; font-weight:700; font-size:.8rem; }
+.rit-save:disabled{ opacity:.4; cursor:not-allowed; }
+.rit-del{ background:transparent; color:#f87171; border:1px solid rgba(248,113,113,.3); border-radius:8px; padding:6px 14px; cursor:pointer; font-size:.8rem; }
+.rutina-add{ align-self:flex-start; background:transparent; color:var(--ink-dim); border:1px dashed var(--panel-bd); border-radius:10px; padding:8px 14px; cursor:pointer; font-size:.85rem; }
