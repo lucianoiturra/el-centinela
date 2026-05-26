@@ -21,6 +21,7 @@ import {
   saveLineaEspiritual as saveLineaAction,
 } from "@/app/actions/day";
 import DayDetail from "@/components/DayDetail";
+import TrainingCard from "@/components/TrainingCard";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -55,6 +56,8 @@ export default function Sentinel() {
   const [linea, setLinea] = useState("");
   const [detailDate, setDetailDate] = useState<Date | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [trainingDone, setTrainingDone] = useState(false);
+  const [trainingRequired, setTrainingRequired] = useState(false);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -102,6 +105,7 @@ export default function Sentinel() {
         setTaaState(dayState.taa ?? "");
         setTaaDone(dayState.taa_done);
         setLinea(dayState.linea ?? "");
+        setTrainingDone(dayState.training_done === true);
         setChecks(dayChecks);
         setChainData(chain);
         setYestHadTaa(!!yestState.taa);
@@ -200,14 +204,25 @@ export default function Sentinel() {
   const toggleWon = useCallback(() => {
     const next = !taaDone;
     setTaaDone(next);
+    const newWon = next && (trainingDone || !trainingRequired);
     // Actualizar la cadena del mes optimísticamente
     setChainData((prev) => {
       const existing = prev.findIndex((r) => r.date === ds);
-      if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, won: next } : r));
-      return next ? [...prev, { date: ds, won: true }] : prev;
+      if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, won: newWon } : r));
+      return newWon ? [...prev, { date: ds, won: true }] : prev;
     });
     markTaaDoneAction(today, next).catch(console.error);
-  }, [taaDone, today, ds]);
+  }, [taaDone, trainingDone, trainingRequired, today, ds]);
+
+  const dayWon = taaDone && (trainingDone || !trainingRequired);
+
+  const handleTrainingDone = useCallback((done: boolean) => {
+    setTrainingDone(done);
+  }, []);
+
+  const handleSessionLoaded = useCallback((hasSession: boolean) => {
+    setTrainingRequired(hasSession);
+  }, []);
 
   const saveTaa = useCallback(() => {
     const v = gateValue.trim();
@@ -251,6 +266,7 @@ export default function Sentinel() {
         sabbath={sabbath}
         taa={taa}
         taaDone={taaDone}
+        won={dayWon}
         cycle={cycle}
         min={min}
         today={today}
@@ -259,6 +275,12 @@ export default function Sentinel() {
         onToggleWon={toggleWon}
         onEditTaa={() => openGate(true)}
         onOpenGate={() => openGate(false)}
+      />
+
+      <TrainingCard
+        date={today}
+        onSessionDone={handleTrainingDone}
+        onSessionLoaded={handleSessionLoaded}
       />
 
       {routine === null ? (
@@ -347,6 +369,7 @@ function Hero(props: {
   sabbath: boolean;
   taa: string;
   taaDone: boolean;
+  won: boolean;
   cycle: Cycle;
   min: number;
   today: Date;
@@ -373,7 +396,7 @@ function Hero(props: {
   );
 
   return (
-    <div className={`hero${sabbath ? " sabbath" : ""}${!sabbath && taaDone ? " won" : ""}`}>
+    <div className={`hero${sabbath ? " sabbath" : ""}${!sabbath && props.won ? " won" : ""}`}>
       {sabbath ? (
         <div className="hero-phase" style={{ color: "#6ee7b7" }}>✡ Sábado Santo · {DFULL[today.getDay()]}</div>
       ) : (
@@ -413,10 +436,10 @@ function Hero(props: {
       )}
       {focus.mode === "norte" && norte}
 
-      {!sabbath && (taaDone ? (
+      {!sabbath && (props.won ? (
         <>
           <div className="dg">
-            <div className="won-banner">🏆 Día Ganado <small>cerraste tu TAA — esto mueve la aguja</small></div>
+            <div className="won-banner">🏆 Día Ganado <small>TAA + entrenamiento — esto mueve la aguja</small></div>
           </div>
           <div className="dg" style={{ marginTop: 10 }}>
             <button className="dg-btn on" onClick={props.onToggleWon}><span className="box">✓</span>TAA cumplida</button>
