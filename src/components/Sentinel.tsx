@@ -20,6 +20,7 @@ import {
   getLatestCycleStart,
   saveLineaEspiritual as saveLineaAction,
 } from "@/app/actions/day";
+import DayDetail from "@/components/DayDetail";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -52,6 +53,8 @@ export default function Sentinel() {
   const [routine, setRoutine] = useState<RoutineRitual[] | null>(null);
   const [cycleInfo, setCycleInfo] = useState<{ date: string; length: number } | null>(null);
   const [linea, setLinea] = useState("");
+  const [detailDate, setDetailDate] = useState<Date | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -121,7 +124,7 @@ export default function Sentinel() {
         }
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, ds]);
+  }, [mounted, ds, reloadKey]);
 
   // ── Eventos de Google Calendar (Fase 6) ──
   useEffect(() => {
@@ -274,7 +277,7 @@ export default function Sentinel() {
         />
       )}
 
-      <Chain today={today} chainData={chainData} cycleInfo={cycleInfo} />
+      <Chain today={today} chainData={chainData} cycleInfo={cycleInfo} onPick={setDetailDate} />
 
       {gateOpen && (
         <div className="gate">
@@ -301,6 +304,14 @@ export default function Sentinel() {
             </div>
           </div>
         </div>
+      )}
+
+      {detailDate && (
+        <DayDetail
+          date={detailDate}
+          routine={routine ?? []}
+          onClose={() => { setDetailDate(null); setReloadKey((k) => k + 1); }}
+        />
       )}
     </div>
   );
@@ -549,7 +560,7 @@ function Spine({
 }
 
 // ════════════════ CHAIN (mes actual) ════════════════
-function Chain({ today, chainData, cycleInfo }: { today: Date; chainData: { date: string; taa_done: boolean }[]; cycleInfo: { date: string; length: number } | null }) {
+function Chain({ today, chainData, cycleInfo, onPick }: { today: Date; chainData: { date: string; taa_done: boolean }[]; cycleInfo: { date: string; length: number } | null; onPick: (date: Date) => void }) {
   const year = today.getFullYear();
   const month = today.getMonth();
   const days = new Date(year, month + 1, 0).getDate();
@@ -558,7 +569,7 @@ function Chain({ today, chainData, cycleInfo }: { today: Date; chainData: { date
   // Mapa rápido de fecha → taa_done
   const wonMap = new Map(chainData.map((r) => [r.date, r.taa_done]));
 
-  const cells: { d: number; status: string; cyc: string | null }[] = [];
+  const cells: { d: number; status: string; cyc: string | null; editable: boolean }[] = [];
   let won = 0;
   for (let d = 1; d <= days; d++) {
     const date = new Date(year, month, d);
@@ -570,7 +581,7 @@ function Chain({ today, chainData, cycleInfo }: { today: Date; chainData: { date
     else status = wonMap.get(dateKey) === true ? "won" : "lost";
     if (status === "won") won++;
     const cyc = getCyclePhase(date, cycleStart, cycleInfo?.length);
-    cells.push({ d, status, cyc: cyc ? cyc.color : null });
+    cells.push({ d, status, cyc: cyc ? cyc.color : null, editable: date <= today });
   }
   const label = (s: string) => (s === "won" ? "✓" : s === "lost" ? "✗" : s === "sabbath" ? "✡" : s === "today" ? "●" : "");
 
@@ -582,7 +593,12 @@ function Chain({ today, chainData, cycleInfo }: { today: Date; chainData: { date
       </div>
       <div className="chain">
         {cells.map((c) => (
-          <div className={`cdot ${c.status}`} key={c.d} title={`${c.d} ${MONTHS[month]}`}>
+          <div
+            className={`cdot ${c.status}${c.editable ? " editable" : ""}`}
+            key={c.d}
+            title={`${c.d} ${MONTHS[month]}`}
+            onClick={c.editable ? () => onPick(new Date(year, month, c.d)) : undefined}
+          >
             <span className="num">{c.d}</span>
             {label(c.status)}
             {c.cyc && <span className="cycle-strip" style={{ background: c.cyc }} />}
