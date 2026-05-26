@@ -41,7 +41,7 @@ export default function Sentinel() {
   const [taa, setTaaState] = useState("");
   const [taaDone, setTaaDone] = useState(false);
   const [checks, setChecks] = useState<Record<string, boolean>>({});
-  const [chainData, setChainData] = useState<{ date: string; taa_done: boolean }[]>([]);
+  const [chainData, setChainData] = useState<{ date: string; won: boolean }[]>([]);
   const [yestHadTaa, setYestHadTaa] = useState(false);
   const [yestDone, setYestDone] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
@@ -203,8 +203,8 @@ export default function Sentinel() {
     // Actualizar la cadena del mes optimísticamente
     setChainData((prev) => {
       const existing = prev.findIndex((r) => r.date === ds);
-      if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, taa_done: next } : r));
-      return next ? [...prev, { date: ds, taa_done: true }] : prev;
+      if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, won: next } : r));
+      return next ? [...prev, { date: ds, won: true }] : prev;
     });
     markTaaDoneAction(today, next).catch(console.error);
   }, [taaDone, today, ds]);
@@ -560,14 +560,14 @@ function Spine({
 }
 
 // ════════════════ CHAIN (mes actual) ════════════════
-function Chain({ today, chainData, cycleInfo, onPick }: { today: Date; chainData: { date: string; taa_done: boolean }[]; cycleInfo: { date: string; length: number } | null; onPick: (date: Date) => void }) {
+function Chain({ today, chainData, cycleInfo, onPick }: { today: Date; chainData: { date: string; won: boolean }[]; cycleInfo: { date: string; length: number } | null; onPick: (date: Date) => void }) {
   const year = today.getFullYear();
   const month = today.getMonth();
   const days = new Date(year, month + 1, 0).getDate();
   const cycleStart = cycleInfo ? new Date(cycleInfo.date + "T00:00:00") : undefined;
 
-  // Mapa rápido de fecha → taa_done
-  const wonMap = new Map(chainData.map((r) => [r.date, r.taa_done]));
+  // Mapa rápido de fecha → won
+  const wonMap = new Map(chainData.map((r) => [r.date, r.won]));
 
   const cells: { d: number; status: string; cyc: string | null; editable: boolean }[] = [];
   let won = 0;

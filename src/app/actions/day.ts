@@ -33,7 +33,7 @@ export async function getDayState(date: Date) {
   const userId = await getUserId();
   const d = fmtDate(date);
   const rows = await sql`
-    SELECT taa, taa_done, linea_espiritual FROM day_state
+    SELECT taa, taa_done, linea_espiritual, training_done FROM day_state
     WHERE user_id = ${userId} AND date = ${d}
     LIMIT 1
   `;
@@ -42,6 +42,7 @@ export async function getDayState(date: Date) {
     taa: (row?.taa as string | undefined) ?? null,
     taa_done: (row?.taa_done as boolean | undefined) ?? false,
     linea: (row?.linea_espiritual as string | undefined) ?? "",
+    training_done: (row?.training_done as boolean | null | undefined) ?? null,
   };
 }
 
@@ -76,14 +77,17 @@ export async function getDiario() {
 export async function getMonthChain(days: number = 30) {
   const userId = await getUserId();
   const rows = await sql`
-    SELECT date::text as date, taa_done FROM day_state
+    SELECT
+      date::text as date,
+      taa_done AND COALESCE(training_done, TRUE) AS won
+    FROM day_state
     WHERE user_id = ${userId}
       AND date >= CURRENT_DATE - (${days} || ' days')::interval
     ORDER BY date ASC
   `;
   return rows.map((r) => ({
     date: r.date as string,
-    taa_done: r.taa_done as boolean,
+    won: r.won as boolean,
   }));
 }
 
