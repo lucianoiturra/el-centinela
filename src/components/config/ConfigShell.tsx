@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import MiRutina from "./MiRutina";
+import VistaMensual from "./VistaMensual";
 
 type Tab = "rutina" | "ciclo" | "mensual" | "diario";
 
@@ -21,7 +22,8 @@ export default function ConfigShell() {
       </div>
       <div className="config-body">
         {tab === "rutina" && <MiRutina />}
-        {tab !== "rutina" && <div className="config-soon">Próximamente.</div>}
+        {tab === "mensual" && <VistaMensual />}
+        {(tab === "ciclo" || tab === "diario") && <div className="config-soon">Próximamente.</div>}
       </div>
     </div>
   );
