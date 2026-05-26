@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase } from "@/lib/types";
 import { DEFAULT_ROUTINE, getRoutineRituals, isSabbath } from "@/lib/rituals";
 import { getFinanceRituals } from "@/lib/finance";
@@ -40,7 +41,10 @@ export default function Sentinel() {
   const [yestDone, setYestDone] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [gateValue, setGateValue] = useState("");
-  const [events] = useState<CalendarEvent[]>([]); // Fase 6: Google Calendar
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const { status } = useSession();
+  // Estado del puente con Google Calendar: si necesitamos reautenticar mostramos el aviso.
+  const [calReauth, setCalReauth] = useState(false);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -101,6 +105,29 @@ export default function Sentinel() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, ds]);
+
+  // ── Eventos de Google Calendar (Fase 6) ──
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    fetch("/api/calendar")
+      .then(async (r) => {
+        if (cancelled) return;
+        if (r.status === 401) {
+          setCalReauth(true); // sesión/refresh token vencido → reconectar
+          return;
+        }
+        if (!r.ok) return;
+        const data = await r.json();
+        if (cancelled) return;
+        setEvents(data.events ?? []);
+        setCalReauth(false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   // ── Fondo dinámico ──
   useEffect(() => {
@@ -185,7 +212,15 @@ export default function Sentinel() {
         onOpenGate={() => openGate(false)}
       />
 
-      <Spine rituals={[...rituals, ...eventsToRituals(events)]} checks={checks} min={min} onToggle={toggleCheck} />
+      <Spine
+        rituals={[...rituals, ...eventsToRituals(events)]}
+        checks={checks}
+        min={min}
+        onToggle={toggleCheck}
+        showConnect={status !== "authenticated" || calReauth}
+        connectLabel={calReauth ? "Reconectar calendario" : "Conectar calendario"}
+        onConnect={() => signIn("google", { callbackUrl: "/" })}
+      />
 
       <Chain today={today} chainData={chainData} />
 
@@ -231,11 +266,16 @@ function eventsToRituals(events: CalendarEvent[]): Ritual[] {
       icon: "📅",
       pillar: "cab",
       phase,
+      startMin: e.allDay ? undefined : m,
       time: e.allDay ? undefined : `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
       source: "calendar" as const,
     };
   });
 }
+
+// Minuto base de cada franja: los rituales sin hora se mantienen al inicio de su franja
+// (orden manual estable), y los que tienen hora se intercalan cronológicamente.
+const PHASE_FLOOR: Record<RitualPhase, number> = { manana: 0, tarde: 780, noche: 1080 };
 
 // ════════════════ HERO ════════════════
 type Cycle = ReturnType<typeof getCyclePhase>;
@@ -369,17 +409,32 @@ function HeroFoot({
 
 // ════════════════ SPINE ════════════════
 function Spine({
-  rituals, checks, min, onToggle,
-}: { rituals: Ritual[]; checks: Record<string, boolean>; min: number; onToggle: (id: string) => void; }) {
+  rituals, checks, min, onToggle, showConnect, connectLabel, onConnect,
+}: {
+  rituals: Ritual[];
+  checks: Record<string, boolean>;
+  min: number;
+  onToggle: (id: string) => void;
+  showConnect: boolean;
+  connectLabel: string;
+  onConnect: () => void;
+}) {
   const order: RitualPhase[] = ["manana", "tarde", "noche"];
   const curPhase = phaseOf(min);
   const curIdx = curPhase === "madrugada" ? -1 : order.indexOf(curPhase as RitualPhase);
 
   return (
     <div className="spine">
-      <div className="spine-title">La espina de hoy</div>
+      <div className="spine-head">
+        <div className="spine-title">La espina de hoy</div>
+        {showConnect && (
+          <button className="cal-connect" onClick={onConnect}>📅 {connectLabel}</button>
+        )}
+      </div>
       {order.map((phid, idx) => {
-        const items = rituals.filter((r) => r.phase === phid);
+        const items = rituals
+          .filter((r) => r.phase === phid)
+          .sort((a, b) => (a.startMin ?? PHASE_FLOOR[phid]) - (b.startMin ?? PHASE_FLOOR[phid]));
         if (!items.length) return null;
         const cls = idx === curIdx ? "current" : idx < curIdx ? "past" : "";
         return (
