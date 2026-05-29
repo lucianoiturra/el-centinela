@@ -58,6 +58,7 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .dg-edit:hover{ color:var(--ink); }
 .won-banner{ font-family:Georgia,serif; font-size:2rem; color:var(--gold); font-weight:600; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .won-banner small{ font-family:inherit; font-size:.8rem; color:var(--ink-dim); font-weight:400; }
+.dg-pending{ margin-top:10px; font-size:.8rem; color:var(--gold); line-height:1.4; }
 
 .hero-foot{ margin-top:18px; padding-top:16px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:9px; }
 .mchip{ display:inline-flex; align-items:center; gap:8px; font-size:.78rem; color:var(--ink-dim); }

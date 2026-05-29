@@ -2,6 +2,7 @@
 import { sql } from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
 import { getUserId, fmtDate } from "@/lib/server-user";
+import { isDayWon, isTrainingRequiredOn } from "@/lib/training";
 
 // ─── TAA ──────────────────────────────────────────────────────────────────────
 
@@ -73,22 +74,59 @@ export async function getDiario() {
   }));
 }
 
-// Últimos N días para la cadena del mes
-export async function getMonthChain(days: number = 30) {
+// Cadena de un mes calendario concreto.
+// `year` y `month` (0-based, enero=0) vienen del cliente para usar SU fecha local,
+// no la del servidor (UTC) — evita que la cadena se desfase de noche.
+// El "Día Ganado" se calcula con la regla única isDayWon, igual que la vista de hoy,
+// teniendo en cuenta si ese día tenía entrenamiento obligatorio (no descanso/sábado).
+export async function getMonthChain(year: number, month: number) {
   const userId = await getUserId();
+  const mm = String(month + 1).padStart(2, "0");
+  const first = `${year}-${mm}-01`;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const last = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+
   const rows = await sql`
-    SELECT
-      date::text as date,
-      taa_done AND COALESCE(training_done, TRUE) AS won
+    SELECT date::text as date, taa_done, training_done
     FROM day_state
-    WHERE user_id = ${userId}
-      AND date >= CURRENT_DATE - (${days} || ' days')::interval
+    WHERE user_id = ${userId} AND date >= ${first} AND date <= ${last}
     ORDER BY date ASC
   `;
-  return rows.map((r) => ({
-    date: r.date as string,
-    won: r.won as boolean,
-  }));
+
+  // Plan + mapa de días con entrenamiento obligatorio (activity_type ≠ 'rest').
+  const planRows = await sql`
+    SELECT id, start_date::text as start_date, race_date::text as race_date
+    FROM training_plan WHERE user_id = ${userId} LIMIT 1
+  `;
+  let plan: { startDate: Date; raceDate: Date } | null = null;
+  let requiredSet: Set<string> | null = null;
+  if (planRows[0]) {
+    plan = {
+      startDate: new Date((planRows[0].start_date as string) + "T00:00:00Z"),
+      raceDate: new Date((planRows[0].race_date as string) + "T00:00:00Z"),
+    };
+    const tmpl = await sql`
+      SELECT p.phase_number, t.day_of_week
+      FROM training_session_template t
+      JOIN training_phase p ON p.id = t.phase_id
+      WHERE p.plan_id = ${planRows[0].id as number} AND t.activity_type <> 'rest'
+    `;
+    requiredSet = new Set(tmpl.map((r) => `${r.phase_number}-${r.day_of_week}`));
+  }
+
+  return rows.map((r) => {
+    const date = new Date((r.date as string) + "T00:00:00Z");
+    const trainingRequired =
+      plan && requiredSet ? isTrainingRequiredOn(date, plan, requiredSet) : false;
+    return {
+      date: r.date as string,
+      won: isDayWon({
+        taaDone: (r.taa_done as boolean) ?? false,
+        trainingRequired,
+        trainingDone: (r.training_done as boolean) ?? false,
+      }),
+    };
+  });
 }
 
 // ─── TASK CHECKS ──────────────────────────────────────────────────────────────

@@ -93,12 +93,11 @@ export default function Sentinel() {
     if (!mounted) return;
 
     const yest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
     Promise.all([
       getDayState(today),
       getDayChecks(today),
-      getMonthChain(daysInMonth),
+      getMonthChain(today.getFullYear(), today.getMonth()),
       getDayState(yest),
     ])
       .then(([dayState, dayChecks, chain, yestState]) => {
@@ -447,10 +446,17 @@ function Hero(props: {
           </div>
         </>
       ) : taa ? (
-        <div className="dg">
-          <button className="dg-btn" onClick={props.onToggleWon}><span className="box" />Marcar TAA cumplida</button>
-          <button className="dg-edit" onClick={props.onEditTaa}>editar TAA</button>
-        </div>
+        <>
+          <div className="dg">
+            <button className={`dg-btn${taaDone ? " on" : ""}`} onClick={props.onToggleWon}>
+              <span className="box">{taaDone ? "✓" : ""}</span>{taaDone ? "TAA cumplida" : "Marcar TAA cumplida"}
+            </button>
+            <button className="dg-edit" onClick={props.onEditTaa}>editar TAA</button>
+          </div>
+          {taaDone && (
+            <div className="dg-pending">⏳ TAA lista — falta el entrenamiento para ganar el día.</div>
+          )}
+        </>
       ) : null)}
 
       <HeroFoot

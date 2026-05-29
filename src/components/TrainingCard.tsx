@@ -37,7 +37,9 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
     function hydrate(d: TrainingCardData) {
       if (cancelled) return;
       setData(d);
-      onSessionLoaded(d.session !== null);
+      // "Requiere entrenamiento" solo si hay sesión real de bici/pesas.
+      // El descanso activo no se marca como hecho, así que no debe bloquear el Día Ganado.
+      onSessionLoaded(d.session !== null && d.session.activityType !== "rest");
       onSessionDone(d.done);
       const inputs: typeof setInputs = {};
       for (const [eid, sets] of Object.entries(d.todaySets)) {

@@ -41,3 +41,40 @@ export function jsDayToPlanDay(jsDay: number): number {
 export function isSabbathDay(today: Date): boolean {
   return today.getUTCDay() === 6;
 }
+
+/**
+ * Regla única de "Día Ganado". Fuente de verdad compartida por la vista de hoy
+ * (Sentinel) y el histórico (cadena del mes), para que nunca se contradigan.
+ *
+ * - Sin TAA cumplida → nunca se gana.
+ * - Si hay entrenamiento requerido (no descanso, no sábado) → además debe estar hecho.
+ * - Días de descanso/sábado → basta con la TAA.
+ */
+export function isDayWon(input: {
+  taaDone: boolean;
+  trainingRequired: boolean;
+  trainingDone: boolean;
+}): boolean {
+  if (!input.taaDone) return false;
+  if (input.trainingRequired && !input.trainingDone) return false;
+  return true;
+}
+
+/**
+ * ¿Ese día tenía una sesión de entrenamiento obligatoria (bici/pesas)?
+ * El descanso activo y el sábado NO cuentan como requeridos.
+ *
+ * `requiredSet` contiene claves `${phaseNumber}-${planDay}` de las plantillas
+ * cuyo activity_type ≠ 'rest'. Las fechas se interpretan en UTC (medianoche UTC),
+ * igual que el resto de la lógica del plan.
+ */
+export function isTrainingRequiredOn(
+  date: Date,
+  plan: { startDate: Date; raceDate: Date },
+  requiredSet: Set<string>
+): boolean {
+  if (isSabbathDay(date)) return false;
+  const phase = calculatePhaseNumber(plan.startDate, date, plan.raceDate);
+  const planDay = jsDayToPlanDay(date.getUTCDay());
+  return requiredSet.has(`${phase}-${planDay}`);
+}

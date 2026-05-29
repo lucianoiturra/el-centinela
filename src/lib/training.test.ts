@@ -1,6 +1,12 @@
 // src/lib/training.test.ts
 import { describe, it, expect } from "vitest";
-import { calculatePhaseNumber, jsDayToPlanDay, isSabbathDay } from "./training";
+import {
+  calculatePhaseNumber,
+  jsDayToPlanDay,
+  isSabbathDay,
+  isDayWon,
+  isTrainingRequiredOn,
+} from "./training";
 
 const START = new Date("2026-03-04");
 const RACE = new Date("2026-10-04");
@@ -55,5 +61,39 @@ describe("isSabbathDay", () => {
   });
   it("domingo 2026-05-24 → false", () => {
     expect(isSabbathDay(new Date("2026-05-24"))).toBe(false);
+  });
+});
+
+describe("isDayWon", () => {
+  it("sin TAA → nunca se gana, aunque entrene", () => {
+    expect(isDayWon({ taaDone: false, trainingRequired: true, trainingDone: true })).toBe(false);
+    expect(isDayWon({ taaDone: false, trainingRequired: false, trainingDone: false })).toBe(false);
+  });
+  it("TAA + entrenamiento requerido y hecho → ganado", () => {
+    expect(isDayWon({ taaDone: true, trainingRequired: true, trainingDone: true })).toBe(true);
+  });
+  it("TAA pero entrenamiento requerido y NO hecho → NO ganado", () => {
+    expect(isDayWon({ taaDone: true, trainingRequired: true, trainingDone: false })).toBe(false);
+  });
+  it("TAA en día sin entrenamiento requerido (descanso) → ganado", () => {
+    expect(isDayWon({ taaDone: true, trainingRequired: false, trainingDone: false })).toBe(true);
+  });
+});
+
+describe("isTrainingRequiredOn", () => {
+  const plan = { startDate: new Date("2026-03-04"), raceDate: new Date("2026-10-04") };
+  // Fase 2 (mayo) tiene sesión no-descanso el lunes (planDay 1) pero descanso el jueves (planDay 4).
+  const requiredSet = new Set(["2-1"]);
+
+  it("lunes con sesión bici/pesas → requerido", () => {
+    // 2026-05-25 es lunes (planDay 1), fase 2
+    expect(isTrainingRequiredOn(new Date("2026-05-25"), plan, requiredSet)).toBe(true);
+  });
+  it("jueves de descanso → NO requerido", () => {
+    // 2026-05-28 es jueves (planDay 4), no está en requiredSet
+    expect(isTrainingRequiredOn(new Date("2026-05-28"), plan, requiredSet)).toBe(false);
+  });
+  it("sábado → nunca requerido", () => {
+    expect(isTrainingRequiredOn(new Date("2026-05-23"), plan, requiredSet)).toBe(false);
   });
 });
