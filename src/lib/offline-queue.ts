@@ -24,6 +24,7 @@ export type PendingOp = SetLogOp | SessionDoneOp;
 
 // ─── Fecha ────────────────────────────────────────────────────────────────────
 
+// Uses LOCAL date (not UTC) — training dates are user-local.
 export function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -33,10 +34,10 @@ export function fmtDate(d: Date): string {
 const QUEUE_KEY = "sentinel_offline_sets";
 
 export function getQueue(): PendingOp[] {
+  if (typeof localStorage === "undefined") return [];
   try {
-    // In SSR, window is undefined but localStorage might still be stubbed for tests
-    if (typeof localStorage === "undefined") return [];
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    const parsed = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -67,6 +68,7 @@ type MarkSessionDoneFn = (
   done: boolean
 ) => Promise<void>;
 
+/** Returns the number of operations that failed and remain in the queue. */
 export async function flushQueue(
   doSaveSetLog: SaveSetLogFn,
   doMarkSessionDone: MarkSessionDoneFn
