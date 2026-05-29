@@ -6,6 +6,7 @@ import { getFinanceRituals } from "@/lib/finance";
 import {
   getDayState, getDayChecks, setTaskCheck, saveTaa, markTaaDone, saveLineaEspiritual,
 } from "@/app/actions/day";
+import TrainingCard from "@/components/TrainingCard";
 
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -18,6 +19,8 @@ export default function DayDetail({ date, routine, onClose }: { date: Date; rout
   const [linea, setLinea] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [, setTrDone] = useState(false);
+  const [, setTrReq] = useState(false);
   const showFlash = () => { setFlash("✓ guardado"); setTimeout(() => setFlash(null), 1600); };
 
   const rituals = useMemo(
@@ -80,6 +83,12 @@ export default function DayDetail({ date, routine, onClose }: { date: Date; rout
                 </div>
               ))}
             </div>
+
+            <TrainingCard
+              date={date}
+              onSessionDone={setTrDone}
+              onSessionLoaded={setTrReq}
+            />
 
             <label className="dd-label">Línea espiritual</label>
             <textarea className="dd-input" rows={2} value={linea} placeholder="Tu línea de ese día…"
