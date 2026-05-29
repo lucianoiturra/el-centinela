@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { getQueue, enqueue, flushQueue } from "./offline-queue";
+import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache } from "./offline-queue";
 
 // Mock de localStorage
 let store: Record<string, string> = {};
@@ -121,5 +121,40 @@ describe("flushQueue", () => {
 
     expect(remaining).toBe(1);
     expect(getQueue()).toEqual([op2]);
+  });
+});
+
+describe("fmtDate", () => {
+  it("formatea fecha con padding de ceros", () => {
+    expect(fmtDate(new Date(2026, 0, 5))).toBe("2026-01-05");
+  });
+  it("formatea fecha de diciembre", () => {
+    expect(fmtDate(new Date(2026, 11, 31))).toBe("2026-12-31");
+  });
+});
+
+describe("saveCache / loadCache", () => {
+  beforeEach(() => { store = {}; });
+
+  it("loadCache devuelve null cuando no hay datos", () => {
+    expect(loadCache("2026-05-28")).toBeNull();
+  });
+
+  it("saveCache y loadCache hacen round-trip de un objeto", () => {
+    const data = { session: null, exercises: [], done: false, lastSets: {}, todaySets: {} };
+    saveCache("2026-05-28", data);
+    expect(loadCache("2026-05-28")).toEqual(data);
+  });
+
+  it("loadCache devuelve null si el JSON está corrupto", () => {
+    store["sentinel_tc_2026-05-28"] = "{{bad json";
+    expect(loadCache("2026-05-28")).toBeNull();
+  });
+
+  it("claves distintas no se solapan", () => {
+    saveCache("2026-05-28", { done: true });
+    saveCache("2026-05-27", { done: false });
+    expect(loadCache<{ done: boolean }>("2026-05-28")).toEqual({ done: true });
+    expect(loadCache<{ done: boolean }>("2026-05-27")).toEqual({ done: false });
   });
 });

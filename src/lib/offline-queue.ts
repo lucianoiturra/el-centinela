@@ -102,14 +102,14 @@ export async function flushQueue(
 const CACHE_PREFIX = "sentinel_tc_";
 
 export function saveCache(dateKey: string, data: unknown): void {
-  if (typeof window === "undefined") return;
+  if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(CACHE_PREFIX + dateKey, JSON.stringify(data));
-  } catch {}
+  } catch { console.warn("[offline-queue] saveCache failed:", dateKey); }
 }
 
 export function loadCache<T>(dateKey: string): T | null {
-  if (typeof window === "undefined") return null;
+  if (typeof localStorage === "undefined") return null;
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + dateKey);
     return raw ? (JSON.parse(raw) as T) : null;
