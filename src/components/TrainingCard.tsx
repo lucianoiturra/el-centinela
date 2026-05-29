@@ -9,6 +9,7 @@ import {
   type TodaySetEntry,
 } from "@/app/actions/training";
 import type { TrainingExercise } from "@/lib/types";
+import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache, type PendingOp } from "@/lib/offline-queue";
 
 interface TrainingCardProps {
   date: Date;
@@ -26,34 +27,45 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
   const [setInputs, setSetInputs] = useState<
     Record<number, Record<number, { w: string; r: string; d: string }>>
   >({});
+  const { queueSetLog, queueSessionDone, pendingCount, synced } = useOfflineQueue();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    const dateKey = fmtDate(date);
+
+    function hydrate(d: TrainingCardData) {
+      if (cancelled) return;
+      setData(d);
+      onSessionLoaded(d.session !== null);
+      onSessionDone(d.done);
+      const inputs: typeof setInputs = {};
+      for (const [eid, sets] of Object.entries(d.todaySets)) {
+        inputs[Number(eid)] = {};
+        for (const s of sets) {
+          inputs[Number(eid)][s.setNumber] = {
+            w: s.weightKg != null ? String(s.weightKg) : "",
+            r: s.repsCompleted != null ? String(s.repsCompleted) : "",
+            d: s.durationSeconds != null ? String(s.durationSeconds) : "",
+          };
+        }
+      }
+      setSetInputs(inputs);
+    }
+
     getTrainingCardData(date)
       .then((d) => {
-        if (cancelled) return;
-        setData(d);
-        onSessionLoaded(d.session !== null);
-        onSessionDone(d.done);
-        // Pre-cargar sets de hoy en los inputs
-        const inputs: typeof setInputs = {};
-        for (const [eid, sets] of Object.entries(d.todaySets)) {
-          inputs[Number(eid)] = {};
-          for (const s of sets) {
-            inputs[Number(eid)][s.setNumber] = {
-              w: s.weightKg != null ? String(s.weightKg) : "",
-              r: s.repsCompleted != null ? String(s.repsCompleted) : "",
-              d: s.durationSeconds != null ? String(s.durationSeconds) : "",
-            };
-          }
-        }
-        setSetInputs(inputs);
+        saveCache(dateKey, d);
+        hydrate(d);
       })
-      .catch(console.error)
+      .catch(() => {
+        const cached = loadCache<TrainingCardData>(dateKey);
+        if (cached) hydrate(cached);
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
   const toggleDone = useCallback(async () => {
@@ -61,8 +73,8 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
     const next = !data.done;
     setData((d) => d ? { ...d, done: next } : d);
     onSessionDone(next);
-    await markSessionDone(date, data.session.id, next);
-  }, [data, date, onSessionDone]);
+    await queueSessionDone(date, data.session.id, next);
+  }, [data, date, onSessionDone, queueSessionDone]);
 
   const toggleExCheck = useCallback((exId: number) => {
     setExChecks((c) => ({ ...c, [exId]: !c[exId] }));
@@ -76,13 +88,13 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
       value: string
     ) => {
       const num = value.trim() === "" ? null : Number(value);
-      await saveSetLog(date, exId, setNumber, {
+      await queueSetLog(date, exId, setNumber, {
         weightKg: field === "w" ? num : undefined,
         repsCompleted: field === "r" ? num : undefined,
         durationSeconds: field === "d" ? num : undefined,
       });
     },
-    [date]
+    [date, queueSetLog]
   );
 
   const updateInput = useCallback(
@@ -169,8 +181,89 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
           ✓ Marcar sesión hecha
         </button>
       )}
+      {pendingCount > 0 && (
+        <div className="training-offline-banner">
+          {pendingCount} cambio{pendingCount > 1 ? "s" : ""} pendiente{pendingCount > 1 ? "s" : ""} · sin conexión
+        </div>
+      )}
+      {synced && (
+        <div className="training-offline-banner synced">✓ Sincronizado</div>
+      )}
     </div>
   );
+}
+
+function useOfflineQueue() {
+  const [pendingCount, setPendingCount] = useState(0);
+  const [synced, setSynced] = useState(false);
+
+  const flush = useCallback(async () => {
+    const before = getQueue().length;
+    if (before === 0) return;
+    const remaining = await flushQueue(saveSetLog, markSessionDone);
+    setPendingCount(remaining);
+    if (remaining < before) setSynced(true);
+  }, []);
+
+  useEffect(() => {
+    setPendingCount(getQueue().length);
+    flush();
+  }, [flush]);
+
+  useEffect(() => {
+    if (!synced) return;
+    const t = setTimeout(() => setSynced(false), 2000);
+    return () => clearTimeout(t);
+  }, [synced]);
+
+  useEffect(() => {
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [flush]);
+
+  const queueSetLog = useCallback(
+    async (
+      date: Date,
+      exerciseId: number,
+      setNumber: number,
+      data: { weightKg?: number | null; repsCompleted?: number | null; durationSeconds?: number | null }
+    ) => {
+      try {
+        await saveSetLog(date, exerciseId, setNumber, data);
+      } catch {
+        enqueue({
+          type: "setLog",
+          date: fmtDate(date),
+          exerciseId,
+          setNumber,
+          weightKg: data.weightKg ?? null,
+          repsCompleted: data.repsCompleted ?? null,
+          durationSeconds: data.durationSeconds ?? null,
+        });
+        setPendingCount((n) => n + 1);
+      }
+    },
+    []
+  );
+
+  const queueSessionDone = useCallback(
+    async (date: Date, sessionTemplateId: number, done: boolean) => {
+      try {
+        await markSessionDone(date, sessionTemplateId, done);
+      } catch {
+        enqueue({
+          type: "sessionDone",
+          date: fmtDate(date),
+          sessionTemplateId,
+          done,
+        });
+        setPendingCount((n) => n + 1);
+      }
+    },
+    []
+  );
+
+  return { queueSetLog, queueSessionDone, pendingCount, synced };
 }
 
 function intensityLabel(intensity: string): string {
