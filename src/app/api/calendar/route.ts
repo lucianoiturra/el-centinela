@@ -6,7 +6,7 @@ import { auth } from "@/auth";
  * Devuelve los eventos del día actual desde Google Calendar.
  * El cliente (Sentinel.tsx) los llama para enriquecer la espina del día.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.accessToken) {
@@ -17,17 +17,27 @@ export async function GET() {
     return NextResponse.json({ error: "RefreshTokenError" }, { status: 401 });
   }
 
-  // Ventana: medianoche local → medianoche siguiente (UTC)
-  const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(now);
-  endOfDay.setHours(23, 59, 59, 999);
+  // Ventana del día. El cliente envía timeMin/timeMax (su día LOCAL, en ISO/UTC)
+  // porque el servidor corre en UTC y no conoce la zona del usuario; si no llegan
+  // (o son inválidos), caemos a la medianoche del servidor como último recurso.
+  const sp = new URL(request.url).searchParams;
+  const isISO = (s: string | null): s is string => !!s && !Number.isNaN(Date.parse(s));
+  let timeMin = sp.get("timeMin");
+  let timeMax = sp.get("timeMax");
+  if (!isISO(timeMin) || !isISO(timeMax)) {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+    timeMin = startOfDay.toISOString();
+    timeMax = endOfDay.toISOString();
+  }
 
   const params = new URLSearchParams({
     calendarId: "primary",
-    timeMin: startOfDay.toISOString(),
-    timeMax: endOfDay.toISOString(),
+    timeMin,
+    timeMax,
     singleEvents: "true",
     orderBy: "startTime",
     maxResults: "20",

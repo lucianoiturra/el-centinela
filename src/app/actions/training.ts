@@ -299,9 +299,9 @@ export async function saveSetLog(
        ${data.durationSeconds ?? null}, NOW())
     ON CONFLICT (user_id, date, exercise_id, set_number)
     DO UPDATE SET
-      weight_kg = COALESCE(EXCLUDED.weight_kg, training_set_log.weight_kg),
-      reps_completed = COALESCE(EXCLUDED.reps_completed, training_set_log.reps_completed),
-      duration_seconds = COALESCE(EXCLUDED.duration_seconds, training_set_log.duration_seconds),
+      weight_kg = EXCLUDED.weight_kg,
+      reps_completed = EXCLUDED.reps_completed,
+      duration_seconds = EXCLUDED.duration_seconds,
       updated_at = NOW()
   `;
 }

@@ -1,6 +1,6 @@
 // src/components/TrainingCard.tsx
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   getTrainingCardData,
   markSessionDone,
@@ -27,12 +27,21 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
   const [setInputs, setSetInputs] = useState<
     Record<number, Record<number, { w: string; r: string; d: string }>>
   >({});
+  // Espejo del estado de inputs para leer el set completo en onBlur sin closure
+  // obsoleto: cada blur persiste los 3 campos juntos (ver handleSetBlur).
+  const setInputsRef = useRef(setInputs);
+  useEffect(() => { setInputsRef.current = setInputs; });
   const { queueSetLog, queueSessionDone, pendingCount, synced } = useOfflineQueue();
+
+  // Clave estable del día: solo cambia cuando cambia la fecha real, no cada vez
+  // que el reloj del padre crea un nuevo objeto Date para el mismo día. Sin esto,
+  // el efecto se re-ejecutaba cada 30 s y re-hidrataba los inputs, borrando lo
+  // que el usuario estaba escribiendo.
+  const dateKey = fmtDate(date);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const dateKey = fmtDate(date);
 
     function hydrate(d: TrainingCardData) {
       if (cancelled) return;
@@ -68,7 +77,7 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [dateKey]);
 
   const toggleDone = useCallback(async () => {
     if (!data?.session) return;
@@ -89,11 +98,17 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
       field: "w" | "r" | "d",
       value: string
     ) => {
-      const num = value.trim() === "" ? null : Number(value);
+      // Persistimos SIEMPRE el set completo (peso + reps + duración). Así borrar un
+      // campo (dejarlo vacío → null) lo limpia de verdad en la DB, en lugar de
+      // conservar el valor anterior. Leemos los otros campos del ref para no perder
+      // lo ya escrito.
+      const cur = setInputsRef.current[exId]?.[setNumber] ?? { w: "", r: "", d: "" };
+      const merged = { ...cur, [field]: value };
+      const toNum = (s: string) => (s.trim() === "" ? null : Number(s));
       await queueSetLog(date, exId, setNumber, {
-        weightKg: field === "w" ? num : undefined,
-        repsCompleted: field === "r" ? num : undefined,
-        durationSeconds: field === "d" ? num : undefined,
+        weightKg: toNum(merged.w),
+        repsCompleted: toNum(merged.r),
+        durationSeconds: toNum(merged.d),
       });
     },
     [date, queueSetLog]

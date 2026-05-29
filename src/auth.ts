@@ -31,8 +31,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.expiresAt = account.expires_at; // segundos Unix
       }
 
-      // Si el token no expiró, lo devolvemos tal cual
-      if (Date.now() < (token.expiresAt as number) * 1000 - 60_000) {
+      // Si el token no expiró, lo devolvemos tal cual. Guard explícito: si expiresAt
+      // es undefined, (undefined * 1000) = NaN y la comparación sería siempre false,
+      // forzando un refresh en CADA request.
+      const expiresAt = token.expiresAt as number | undefined;
+      if (expiresAt && Date.now() < expiresAt * 1000 - 60_000) {
+        return token;
+      }
+
+      // Sin refresh token no hay forma de refrescar → devolver lo que haya
+      // (evita golpear el endpoint de Google y marcar error en vano).
+      if (!token.refreshToken) {
         return token;
       }
 

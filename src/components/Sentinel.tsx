@@ -58,6 +58,9 @@ export default function Sentinel() {
   const [reloadKey, setReloadKey] = useState(0);
   const [trainingDone, setTrainingDone] = useState(false);
   const [trainingRequired, setTrainingRequired] = useState(false);
+  // Hasta que TrainingCard reporta, no sabemos si hoy exige entrenamiento. Sin esto,
+  // con la TAA cumplida se mostraba "Día Ganado" un instante antes de revertirlo.
+  const [trainingLoaded, setTrainingLoaded] = useState(false);
 
   const today = useMemo(() => startOfDay(now), [now]);
   const ds = dk(today);
@@ -133,7 +136,11 @@ export default function Sentinel() {
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
-    fetch("/api/calendar")
+    // Ventana del día LOCAL del usuario (el servidor corre en UTC y no la conoce).
+    const start = new Date(`${ds}T00:00:00`);
+    const end = new Date(`${ds}T23:59:59.999`);
+    const qs = `?timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`;
+    fetch("/api/calendar" + qs)
       .then(async (r) => {
         if (cancelled) return;
         if (r.status === 401) {
@@ -150,7 +157,7 @@ export default function Sentinel() {
     return () => {
       cancelled = true;
     };
-  }, [status]);
+  }, [status, ds]);
 
   // ── Rutina del usuario (DB) ──
   useEffect(() => {
@@ -203,7 +210,7 @@ export default function Sentinel() {
   const toggleWon = useCallback(() => {
     const next = !taaDone;
     setTaaDone(next);
-    const newWon = next && (trainingDone || !trainingRequired);
+    const newWon = next && trainingLoaded && (trainingDone || !trainingRequired);
     // Actualizar la cadena del mes optimísticamente
     setChainData((prev) => {
       const existing = prev.findIndex((r) => r.date === ds);
@@ -211,9 +218,11 @@ export default function Sentinel() {
       return newWon ? [...prev, { date: ds, won: true }] : prev;
     });
     markTaaDoneAction(today, next).catch(console.error);
-  }, [taaDone, trainingDone, trainingRequired, today, ds]);
+  }, [taaDone, trainingLoaded, trainingDone, trainingRequired, today, ds]);
 
-  const dayWon = taaDone && (trainingDone || !trainingRequired);
+  const dayWon = taaDone && trainingLoaded && (trainingDone || !trainingRequired);
+  // Mostrar "falta el entrenamiento" solo cuando lo sabemos con certeza.
+  const trainingPending = taaDone && trainingLoaded && trainingRequired && !trainingDone;
 
   const handleTrainingDone = useCallback((done: boolean) => {
     setTrainingDone(done);
@@ -221,6 +230,7 @@ export default function Sentinel() {
 
   const handleSessionLoaded = useCallback((hasSession: boolean) => {
     setTrainingRequired(hasSession);
+    setTrainingLoaded(true);
   }, []);
 
   const saveTaa = useCallback(() => {
@@ -266,6 +276,7 @@ export default function Sentinel() {
         taa={taa}
         taaDone={taaDone}
         won={dayWon}
+        trainingPending={trainingPending}
         cycle={cycle}
         min={min}
         today={today}
@@ -369,6 +380,7 @@ function Hero(props: {
   taa: string;
   taaDone: boolean;
   won: boolean;
+  trainingPending: boolean;
   cycle: Cycle;
   min: number;
   today: Date;
@@ -453,7 +465,7 @@ function Hero(props: {
             </button>
             <button className="dg-edit" onClick={props.onEditTaa}>editar TAA</button>
           </div>
-          {taaDone && (
+          {props.trainingPending && (
             <div className="dg-pending">⏳ TAA lista — falta el entrenamiento para ganar el día.</div>
           )}
         </>

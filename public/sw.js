@@ -1,7 +1,7 @@
 // El Centinela — Service Worker
 // Estrategia: cache-first para assets estáticos, network-first para rutas de app
 
-const CACHE_NAME = "centinela-v1";
+const CACHE_NAME = "centinela-v2";
 
 const STATIC_ASSETS = [
   "/",
@@ -39,6 +39,24 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/_next/")
   ) {
     return; // dejar que el navegador maneje normalmente
+  }
+
+  // Navegaciones (documentos HTML): network-first. Cache-first congelaba el shell
+  // y los nuevos deploys nunca se veían. Online → red (y refresca caché); offline
+  // → cae al documento cacheado, o al "/" como último recurso.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
+    );
+    return;
   }
 
   // Assets estáticos: cache-first
