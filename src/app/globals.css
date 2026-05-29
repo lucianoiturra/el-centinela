@@ -230,5 +230,7 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .training-done-btn{ margin-top:16px; width:100%; background:rgba(45,212,191,.1); color:var(--salud); border:1px solid rgba(45,212,191,.28); border-radius:10px; padding:11px; cursor:pointer; font-weight:700; font-size:.88rem; transition:all .18s; font-family:inherit; }
 .training-done-btn:hover{ background:rgba(45,212,191,.18); }
 .training-done-btn.on{ background:rgba(45,212,191,.2); border-color:var(--salud); }
+.training-offline-banner{ margin-top:12px; text-align:center; font-size:.76rem; padding:6px 12px; border-radius:8px; background:rgba(251,146,60,.08); border:1px solid rgba(251,146,60,.22); color:#fb923c; }
+.training-offline-banner.synced{ background:rgba(45,212,191,.08); border-color:rgba(45,212,191,.25); color:var(--salud); }
 .training-badge{ display:flex; align-items:center; gap:8px; font-size:.9rem; color:var(--salud); margin-top:12px; }
 .training-badge-undo{ background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:.72rem; text-decoration:underline; text-underline-offset:2px; font-family:inherit; margin-left:auto; }
