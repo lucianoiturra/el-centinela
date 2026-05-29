@@ -9,7 +9,7 @@ import {
   type TodaySetEntry,
 } from "@/app/actions/training";
 import type { TrainingExercise } from "@/lib/types";
-import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache, type PendingOp } from "@/lib/offline-queue";
+import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache } from "@/lib/offline-queue";
 
 interface TrainingCardProps {
   date: Date;
@@ -202,8 +202,9 @@ function useOfflineQueue() {
     if (before === 0) return;
     const remaining = await flushQueue(saveSetLog, markSessionDone);
     setPendingCount(remaining);
-    if (remaining < before) setSynced(true);
-  }, []);
+    if (remaining === 0) setSynced(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // saveSetLog and markSessionDone are stable module-level imports
 
   useEffect(() => {
     setPendingCount(getQueue().length);
