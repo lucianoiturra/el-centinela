@@ -1,19 +1,31 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getToken } from "next-auth/jwt";
 
 /**
  * GET /api/calendar
  * Devuelve los eventos del día actual desde Google Calendar.
  * El cliente (Sentinel.tsx) los llama para enriquecer la espina del día.
+ *
+ * El accessToken se lee server-side desde el JWT cifrado (cookie de sesión),
+ * NO desde la sesión expuesta al navegador.
  */
 export async function GET(request: Request) {
-  const session = await auth();
+  // En producción (https) la cookie de sesión lleva el prefijo __Secure-;
+  // detectarlo nos da el cookieName/secureCookie correctos sin depender del entorno.
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const secureCookie = cookieHeader.includes("__Secure-authjs.session-token");
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET,
+    secureCookie,
+  });
 
-  if (!session?.accessToken) {
+  const accessToken = token?.accessToken;
+  if (!accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.error === "RefreshTokenError") {
+  if (token?.error === "RefreshTokenError") {
     return NextResponse.json({ error: "RefreshTokenError" }, { status: 401 });
   }
 
@@ -47,7 +59,7 @@ export async function GET(request: Request) {
     const resp = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
       {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         // Next.js cache: no cachear (los eventos cambian)
         cache: "no-store",
       }
@@ -56,7 +68,7 @@ export async function GET(request: Request) {
     if (!resp.ok) {
       const err = await resp.json();
       console.error("Google Calendar error:", err);
-      return NextResponse.json({ error: "CalendarFetchError", detail: err }, { status: resp.status });
+      return NextResponse.json({ error: "CalendarFetchError" }, { status: resp.status });
     }
 
     const data = await resp.json();

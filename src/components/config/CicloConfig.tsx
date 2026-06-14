@@ -31,7 +31,7 @@ export default function CicloConfig() {
 
   const save = async () => {
     if (!startISO) return;
-    await saveCycleStart(new Date(startISO + "T00:00:00"), length);
+    await saveCycleStart(startISO, length);
     setFlash("✓ Guardado");
     setTimeout(() => setFlash(null), 2200);
   };

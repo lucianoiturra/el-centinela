@@ -20,6 +20,7 @@ import {
   getLatestCycleStart,
   saveLineaEspiritual as saveLineaAction,
 } from "@/app/actions/day";
+import { pruneOldKeys } from "@/lib/offline-queue";
 import DayDetail from "@/components/DayDetail";
 import TrainingCard from "@/components/TrainingCard";
 
@@ -85,8 +86,13 @@ export default function Sentinel() {
 
   // ── Mount: reloj ──
   useEffect(() => {
+    // Hydration gate + reloj de pared: sincronización legítima con estado del
+    // navegador post-hidratación, no derivable durante el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     setNow(new Date());
+    // Podar datos viejos de localStorage (claves con fecha de >30 días).
+    pruneOldKeys(dk(new Date()));
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
@@ -98,10 +104,10 @@ export default function Sentinel() {
     const yest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
 
     Promise.all([
-      getDayState(today),
-      getDayChecks(today),
+      getDayState(dk(today)),
+      getDayChecks(dk(today)),
       getMonthChain(today.getFullYear(), today.getMonth()),
-      getDayState(yest),
+      getDayState(dk(yest)),
     ])
       .then(([dayState, dayChecks, chain, yestState]) => {
         setTaaState(dayState.taa ?? "");
@@ -194,7 +200,7 @@ export default function Sentinel() {
     (id: string) => {
       const next = !checks[id];
       setChecks((c) => ({ ...c, [id]: next }));
-      setTaskCheckAction(today, id, next).catch(console.error);
+      setTaskCheckAction(dk(today), id, next).catch(console.error);
     },
     [checks, today]
   );
@@ -202,7 +208,7 @@ export default function Sentinel() {
   const saveLinea = useCallback(
     (text: string) => {
       setLinea(text);
-      saveLineaAction(today, text).catch(console.error);
+      saveLineaAction(dk(today), text).catch(console.error);
     },
     [today]
   );
@@ -217,7 +223,7 @@ export default function Sentinel() {
       if (existing >= 0) return prev.map((r, i) => (i === existing ? { ...r, won: newWon } : r));
       return newWon ? [...prev, { date: ds, won: true }] : prev;
     });
-    markTaaDoneAction(today, next).catch(console.error);
+    markTaaDoneAction(dk(today), next).catch(console.error);
   }, [taaDone, trainingLoaded, trainingDone, trainingRequired, today, ds]);
 
   const dayWon = taaDone && trainingLoaded && (trainingDone || !trainingRequired);
@@ -237,7 +243,7 @@ export default function Sentinel() {
     const v = gateValue.trim();
     if (v) {
       setTaaState(v);
-      saveTaaAction(today, v).catch(console.error);
+      saveTaaAction(dk(today), v).catch(console.error);
     }
     setGateOpen(false);
   }, [gateValue, today]);
@@ -515,7 +521,13 @@ function HeroFoot({
 function CierreLinea({ value, onSave }: { value: string; onSave: (t: string) => void }) {
   const [text, setText] = useState(value);
   const [saved, setSaved] = useState(false);
-  useEffect(() => { setText(value); }, [value]);
+  // Resetear el texto cuando cambia la prop `value` (otro día / recarga): patrón
+  // oficial de derived-state-en-render, evita el setState-en-efecto.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(value);
+  }
   const save = () => {
     if (text.trim() === value.trim()) return;
     onSave(text.trim());

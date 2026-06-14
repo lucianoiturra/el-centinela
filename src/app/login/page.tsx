@@ -61,7 +61,7 @@ export default function LoginPage() {
       </button>
 
       <p style={{ opacity: 0.35, fontSize: "0.75rem", textAlign: "center" }}>
-        Usá la cuenta luciano.iturra.c@gmail.com
+        Usá tu cuenta de Google autorizada
       </p>
     </div>
   );

@@ -56,14 +56,14 @@ export function enqueue(op: PendingOp): void {
 // ─── Flush ────────────────────────────────────────────────────────────────────
 
 type SaveSetLogFn = (
-  date: Date,
+  dateISO: string,
   exerciseId: number,
   setNumber: number,
   data: { weightKg?: number | null; repsCompleted?: number | null; durationSeconds?: number | null }
 ) => Promise<void>;
 
 type MarkSessionDoneFn = (
-  date: Date,
+  dateISO: string,
   sessionTemplateId: number,
   done: boolean
 ) => Promise<void>;
@@ -79,15 +79,15 @@ export async function flushQueue(
   const remaining: PendingOp[] = [];
   for (const op of queue) {
     try {
-      const date = new Date(op.date + "T00:00:00");
+      // op.date ya es el string YYYY-MM-DD local que espera el server action.
       if (op.type === "setLog") {
-        await doSaveSetLog(date, op.exerciseId, op.setNumber, {
+        await doSaveSetLog(op.date, op.exerciseId, op.setNumber, {
           weightKg: op.weightKg,
           repsCompleted: op.repsCompleted,
           durationSeconds: op.durationSeconds,
         });
       } else {
-        await doMarkSessionDone(date, op.sessionTemplateId, op.done);
+        await doMarkSessionDone(op.date, op.sessionTemplateId, op.done);
       }
     } catch {
       remaining.push(op);
@@ -116,4 +116,43 @@ export function loadCache<T>(dateKey: string): T | null {
   } catch {
     return null;
   }
+}
+
+// ─── Poda de claves viejas ──────────────────────────────────────────────────
+
+// Prefijos de claves con una fecha YYYY-MM-DD embebida al final.
+const DATED_PREFIXES = [
+  CACHE_PREFIX,          // sentinel_tc_
+  "cent_taaskip_",
+  "cent_task_",
+  "cent_taa_",
+  "cent_won_",
+];
+
+/**
+ * Borra del localStorage las entradas con fecha embebida de más de `maxAgeDays`.
+ * Claves sin prefijo conocido o sin fecha parseable: no se tocan.
+ */
+export function pruneOldKeys(todayISO: string, maxAgeDays = 30): void {
+  if (typeof localStorage === "undefined") return;
+  const today = new Date(todayISO + "T00:00:00Z").getTime();
+  if (Number.isNaN(today)) return;
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+
+  const toDelete: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    const prefix = DATED_PREFIXES.find((p) => key.startsWith(p));
+    if (!prefix) continue;
+    const datePart = key.slice(prefix.length);
+    // La fecha es lo primero tras el prefijo; algunas claves (cent_task_) llevan
+    // sufijo extra (`YYYY-MM-DD_ritualId`), así que no anclamos el final.
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(datePart);
+    if (!m) continue;
+    const t = new Date(m[1] + "T00:00:00Z").getTime();
+    if (Number.isNaN(t)) continue;
+    if (today - t > maxAgeMs) toDelete.push(key);
+  }
+  for (const key of toDelete) localStorage.removeItem(key);
 }

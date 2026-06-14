@@ -1,7 +1,7 @@
 // El Centinela — Service Worker
 // Estrategia: cache-first para assets estáticos, network-first para rutas de app
 
-const CACHE_NAME = "centinela-v2";
+const CACHE_NAME = "centinela-v3";
 
 const STATIC_ASSETS = [
   "/",
@@ -33,10 +33,12 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API, auth y calendar: siempre network (nunca cachear datos en vivo)
+  // API y rutas dinámicas de Next: siempre network (nunca cachear datos en vivo).
+  // /_next/static/ SÍ se cachea (bundles inmutables con hash en el nombre): cae al
+  // bloque cache-first del final, lo que permite que la app cargue offline.
   if (
     url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/_next/")
+    (url.pathname.startsWith("/_next/") && !url.pathname.startsWith("/_next/static/"))
   ) {
     return; // dejar que el navegador maneje normalmente
   }

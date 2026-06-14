@@ -23,6 +23,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
+    // Allowlist de emails. Si ALLOWED_EMAILS está vacío, login abierto (actual).
+    async signIn({ user }) {
+      const allowed = (process.env.ALLOWED_EMAILS ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (allowed.length === 0) return true;
+      return !!user.email && allowed.includes(user.email.toLowerCase());
+    },
+
     // Guarda access_token y refresh_token en el JWT para poder llamar Calendar API
     async jwt({ token, account }) {
       if (account) {
@@ -34,8 +44,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Si el token no expiró, lo devolvemos tal cual. Guard explícito: si expiresAt
       // es undefined, (undefined * 1000) = NaN y la comparación sería siempre false,
       // forzando un refresh en CADA request.
+      // Margen de 5 min: refrescamos antes de la expiración real para reducir la
+      // ventana en que requests concurrentes intentan refrescar a la vez.
       const expiresAt = token.expiresAt as number | undefined;
-      if (expiresAt && Date.now() < expiresAt * 1000 - 60_000) {
+      if (expiresAt && Date.now() < expiresAt * 1000 - 5 * 60_000) {
         return token;
       }
 
@@ -70,13 +82,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       } catch (err) {
         console.error("Error refrescando token de Google:", err);
-        return { ...token, error: "RefreshTokenError" };
+        // Solo invalidar la sesión si Google rechaza el refresh_token de forma
+        // definitiva (invalid_grant). Ante fallos transitorios (red, 5xx)
+        // conservamos el token para reintentar en el próximo request — la carrera
+        // entre requests concurrentes es una limitación conocida de next-auth v5
+        // con JWT strategy; el lock distribuido no se justifica para una app
+        // monousuario.
+        const isInvalidGrant =
+          typeof err === "object" && err !== null && (err as { error?: string }).error === "invalid_grant";
+        return isInvalidGrant ? { ...token, error: "RefreshTokenError" } : token;
       }
     },
 
-    // Expone accessToken y error al cliente (para la ruta de Calendar)
+    // Solo expone `error` al cliente (para mostrar "Reconectar calendario").
+    // El accessToken NO se serializa al navegador: vive únicamente en el JWT
+    // cifrado y se lee server-side con getToken() en /api/calendar.
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
       session.error = token.error as string | undefined;
       return session;
     },

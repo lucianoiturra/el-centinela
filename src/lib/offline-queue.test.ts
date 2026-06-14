@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache } from "./offline-queue";
+import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache, pruneOldKeys } from "./offline-queue";
 
-// Mock de localStorage
+// Mock de localStorage (con length/key reales para pruneOldKeys)
 let store: Record<string, string> = {};
 vi.stubGlobal("localStorage", {
   getItem: (k: string) => store[k] ?? null,
   setItem: (k: string, v: string) => { store[k] = v; },
   removeItem: (k: string) => { delete store[k]; },
   clear: () => { store = {}; },
-  length: 0,
-  key: () => null,
+  get length() { return Object.keys(store).length; },
+  key: (i: number) => Object.keys(store)[i] ?? null,
 });
 
 describe("getQueue", () => {
@@ -76,7 +76,7 @@ describe("flushQueue", () => {
     const remaining = await flushQueue(doSave, doDone);
 
     expect(doSave).toHaveBeenCalledWith(
-      new Date("2026-05-28T00:00:00"), 1, 1,
+      "2026-05-28", 1, 1,
       { weightKg: 60, repsCompleted: 10, durationSeconds: null }
     );
     expect(remaining).toBe(0);
@@ -90,7 +90,7 @@ describe("flushQueue", () => {
 
     const remaining = await flushQueue(doSave, doDone);
 
-    expect(doDone).toHaveBeenCalledWith(new Date("2026-05-28T00:00:00"), 5, true);
+    expect(doDone).toHaveBeenCalledWith("2026-05-28", 5, true);
     expect(remaining).toBe(0);
     expect(getQueue()).toHaveLength(0);
   });
@@ -156,5 +156,37 @@ describe("saveCache / loadCache", () => {
     saveCache("2026-05-27", { done: false });
     expect(loadCache<{ done: boolean }>("2026-05-28")).toEqual({ done: true });
     expect(loadCache<{ done: boolean }>("2026-05-27")).toEqual({ done: false });
+  });
+});
+
+describe("pruneOldKeys", () => {
+  beforeEach(() => { store = {}; });
+
+  it("borra claves con fecha de más de 30 días y conserva las recientes", () => {
+    store["sentinel_tc_2026-04-01"] = "x";      // vieja (>30d antes de 06-14)
+    store["cent_taa_2026-04-01"] = "x";          // vieja
+    store["cent_won_2026-06-10"] = "1";          // reciente
+    store["cent_taaskip_2026-06-13"] = "1";      // reciente
+    store["cent_task_2026-04-01_ritualX"] = "1"; // vieja con sufijo de ritual
+
+    pruneOldKeys("2026-06-14", 30);
+
+    expect(store["sentinel_tc_2026-04-01"]).toBeUndefined();
+    expect(store["cent_taa_2026-04-01"]).toBeUndefined();
+    expect(store["cent_task_2026-04-01_ritualX"]).toBeUndefined();
+    expect(store["cent_won_2026-06-10"]).toBe("1");
+    expect(store["cent_taaskip_2026-06-13"]).toBe("1");
+  });
+
+  it("no toca claves ajenas ni sin fecha parseable", () => {
+    store["sentinel_offline_sets"] = "[]";       // cola: sin fecha
+    store["algo_random"] = "x";                  // ajena
+    store["cent_taa_no-es-fecha"] = "x";         // prefijo conocido sin fecha
+
+    pruneOldKeys("2026-06-14", 30);
+
+    expect(store["sentinel_offline_sets"]).toBe("[]");
+    expect(store["algo_random"]).toBe("x");
+    expect(store["cent_taa_no-es-fecha"]).toBe("x");
   });
 });

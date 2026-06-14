@@ -1,14 +1,18 @@
 "use server";
 import { sql } from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
-import { getUserId, fmtDate } from "@/lib/server-user";
+import { getUserId } from "@/lib/server-user";
 import { isDayWon, isTrainingRequiredOn } from "@/lib/training";
+
+// Las fechas llegan desde el cliente como string `YYYY-MM-DD` (su día LOCAL),
+// no como `Date`. Esto evita el bug de timezone: el servidor corre en UTC y
+// deserializar un `Date` de medianoche local lo corría al día anterior UTC.
 
 // ─── TAA ──────────────────────────────────────────────────────────────────────
 
-export async function saveTaa(date: Date, taa: string) {
+export async function saveTaa(dateISO: string, taa: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, taa, updated_at)
     VALUES (${userId}, ${d}, ${taa}, NOW())
@@ -18,9 +22,9 @@ export async function saveTaa(date: Date, taa: string) {
   revalidatePath("/");
 }
 
-export async function markTaaDone(date: Date, done: boolean) {
+export async function markTaaDone(dateISO: string, done: boolean) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, taa_done, updated_at)
     VALUES (${userId}, ${d}, ${done}, NOW())
@@ -30,9 +34,9 @@ export async function markTaaDone(date: Date, done: boolean) {
   revalidatePath("/");
 }
 
-export async function getDayState(date: Date) {
+export async function getDayState(dateISO: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   const rows = await sql`
     SELECT taa, taa_done, linea_espiritual, training_done FROM day_state
     WHERE user_id = ${userId} AND date = ${d}
@@ -49,9 +53,9 @@ export async function getDayState(date: Date) {
 
 // ─── LÍNEA ESPIRITUAL (cierre) ──────────────────────────────────────────────────
 
-export async function saveLineaEspiritual(date: Date, text: string) {
+export async function saveLineaEspiritual(dateISO: string, text: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, linea_espiritual, updated_at)
     VALUES (${userId}, ${d}, ${text}, NOW())
@@ -131,9 +135,9 @@ export async function getMonthChain(year: number, month: number) {
 
 // ─── TASK CHECKS ──────────────────────────────────────────────────────────────
 
-export async function setTaskCheck(date: Date, taskId: string, checked: boolean) {
+export async function setTaskCheck(dateISO: string, taskId: string, checked: boolean) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO task_check (user_id, date, task_id, checked, updated_at)
     VALUES (${userId}, ${d}, ${taskId}, ${checked}, NOW())
@@ -143,9 +147,9 @@ export async function setTaskCheck(date: Date, taskId: string, checked: boolean)
   revalidatePath("/");
 }
 
-export async function getDayChecks(date: Date): Promise<Record<string, boolean>> {
+export async function getDayChecks(dateISO: string): Promise<Record<string, boolean>> {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   const rows = await sql`
     SELECT task_id, checked FROM task_check
     WHERE user_id = ${userId} AND date = ${d}
@@ -188,9 +192,9 @@ export async function getSprintCommitments(isoYear: number, isoWeek: number) {
 
 // ─── CICLO DE MICHELLE ────────────────────────────────────────────────────────
 
-export async function saveCycleStart(cycleStartDate: Date, cycleLength: number = 28) {
+export async function saveCycleStart(cycleStartISO: string, cycleLength: number = 28) {
   const userId = await getUserId();
-  const d = fmtDate(cycleStartDate);
+  const d = cycleStartISO;
   await sql`
     INSERT INTO cycle_log (user_id, cycle_start_date, cycle_length, updated_at)
     VALUES (${userId}, ${d}, ${cycleLength}, NOW())

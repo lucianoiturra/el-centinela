@@ -6,7 +6,6 @@ import {
   markSessionDone,
   saveSetLog,
   type TrainingCardData,
-  type TodaySetEntry,
 } from "@/app/actions/training";
 import type { TrainingExercise } from "@/lib/types";
 import { getQueue, enqueue, flushQueue, fmtDate, saveCache, loadCache } from "@/lib/offline-queue";
@@ -39,9 +38,16 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
   // que el usuario estaba escribiendo.
   const dateKey = fmtDate(date);
 
+  // Resetear `loading` cuando cambia el día: derived-state-en-render en vez de
+  // setLoading(true) dentro del efecto (evita el setState-en-efecto).
+  const [lastKey, setLastKey] = useState(dateKey);
+  if (dateKey !== lastKey) {
+    setLastKey(dateKey);
+    setLoading(true);
+  }
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     function hydrate(d: TrainingCardData) {
       if (cancelled) return;
@@ -64,7 +70,7 @@ export default function TrainingCard({ date, onSessionDone, onSessionLoaded }: T
       setSetInputs(inputs);
     }
 
-    getTrainingCardData(date)
+    getTrainingCardData(dateKey)
       .then((d) => {
         saveCache(dateKey, d);
         hydrate(d);
@@ -220,13 +226,7 @@ function useOfflineQueue() {
     const remaining = await flushQueue(saveSetLog, markSessionDone);
     setPendingCount(remaining);
     if (remaining === 0) setSynced(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // saveSetLog and markSessionDone are stable module-level imports
-
-  useEffect(() => {
-    setPendingCount(getQueue().length);
-    flush();
-  }, [flush]);
 
   useEffect(() => {
     if (!synced) return;
@@ -235,8 +235,14 @@ function useOfflineQueue() {
   }, [synced]);
 
   useEffect(() => {
+    // Flush al montar (diferido para no setState sincrónicamente en el efecto)
+    // y cada vez que vuelve la conexión.
+    const id = setTimeout(flush, 0);
     window.addEventListener("online", flush);
-    return () => window.removeEventListener("online", flush);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener("online", flush);
+    };
   }, [flush]);
 
   const queueSetLog = useCallback(
@@ -247,7 +253,7 @@ function useOfflineQueue() {
       data: { weightKg?: number | null; repsCompleted?: number | null; durationSeconds?: number | null }
     ) => {
       try {
-        await saveSetLog(date, exerciseId, setNumber, data);
+        await saveSetLog(fmtDate(date), exerciseId, setNumber, data);
       } catch {
         enqueue({
           type: "setLog",
@@ -267,7 +273,7 @@ function useOfflineQueue() {
   const queueSessionDone = useCallback(
     async (date: Date, sessionTemplateId: number, done: boolean) => {
       try {
-        await markSessionDone(date, sessionTemplateId, done);
+        await markSessionDone(fmtDate(date), sessionTemplateId, done);
       } catch {
         enqueue({
           type: "sessionDone",
