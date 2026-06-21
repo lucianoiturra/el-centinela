@@ -10,6 +10,28 @@ export type Pillar =
   | "pareja"
   | "hogar";
 
+export const PILLARS: Pillar[] = [
+  "comunion",
+  "salud",
+  "finanzas",
+  "sistema",
+  "basalto",
+  "cab",
+  "pareja",
+  "hogar",
+];
+
+export const PILLAR_LABELS: Record<Pillar, string> = {
+  comunion: "Comunion",
+  salud: "Salud",
+  finanzas: "Finanzas",
+  sistema: "Sistema",
+  basalto: "Basalto",
+  cab: "CAB",
+  pareja: "Pareja",
+  hogar: "Hogar",
+};
+
 export type Phase = "madrugada" | "manana" | "tarde" | "noche";
 export type RitualPhase = Exclude<Phase, "madrugada">;
 

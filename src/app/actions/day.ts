@@ -1,14 +1,22 @@
 "use server";
 import { sql } from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
-import { getUserId, fmtDate } from "@/lib/server-user";
+import { getUserId } from "@/lib/server-user";
 import { isDayWon, isTrainingRequiredOn } from "@/lib/training";
+import { getRoutine } from "@/app/actions/routine";
+import { getFinanceRituals } from "@/lib/finance";
+import { ritualAppliesOn } from "@/lib/routine-rules";
+import { PILLARS, PILLAR_LABELS, type Pillar } from "@/lib/types";
+
+// Las fechas llegan desde el cliente como string `YYYY-MM-DD` (su día LOCAL),
+// no como `Date`. Esto evita el bug de timezone: el servidor corre en UTC y
+// deserializar un `Date` de medianoche local lo corría al día anterior UTC.
 
 // ─── TAA ──────────────────────────────────────────────────────────────────────
 
-export async function saveTaa(date: Date, taa: string) {
+export async function saveTaa(dateISO: string, taa: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, taa, updated_at)
     VALUES (${userId}, ${d}, ${taa}, NOW())
@@ -18,9 +26,9 @@ export async function saveTaa(date: Date, taa: string) {
   revalidatePath("/");
 }
 
-export async function markTaaDone(date: Date, done: boolean) {
+export async function markTaaDone(dateISO: string, done: boolean) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, taa_done, updated_at)
     VALUES (${userId}, ${d}, ${done}, NOW())
@@ -30,9 +38,9 @@ export async function markTaaDone(date: Date, done: boolean) {
   revalidatePath("/");
 }
 
-export async function getDayState(date: Date) {
+export async function getDayState(dateISO: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   const rows = await sql`
     SELECT taa, taa_done, linea_espiritual, training_done FROM day_state
     WHERE user_id = ${userId} AND date = ${d}
@@ -49,9 +57,9 @@ export async function getDayState(date: Date) {
 
 // ─── LÍNEA ESPIRITUAL (cierre) ──────────────────────────────────────────────────
 
-export async function saveLineaEspiritual(date: Date, text: string) {
+export async function saveLineaEspiritual(dateISO: string, text: string) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO day_state (user_id, date, linea_espiritual, updated_at)
     VALUES (${userId}, ${d}, ${text}, NOW())
@@ -131,9 +139,9 @@ export async function getMonthChain(year: number, month: number) {
 
 // ─── TASK CHECKS ──────────────────────────────────────────────────────────────
 
-export async function setTaskCheck(date: Date, taskId: string, checked: boolean) {
+export async function setTaskCheck(dateISO: string, taskId: string, checked: boolean) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   await sql`
     INSERT INTO task_check (user_id, date, task_id, checked, updated_at)
     VALUES (${userId}, ${d}, ${taskId}, ${checked}, NOW())
@@ -143,9 +151,9 @@ export async function setTaskCheck(date: Date, taskId: string, checked: boolean)
   revalidatePath("/");
 }
 
-export async function getDayChecks(date: Date): Promise<Record<string, boolean>> {
+export async function getDayChecks(dateISO: string): Promise<Record<string, boolean>> {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
   const rows = await sql`
     SELECT task_id, checked FROM task_check
     WHERE user_id = ${userId} AND date = ${d}
@@ -153,6 +161,94 @@ export async function getDayChecks(date: Date): Promise<Record<string, boolean>>
   return Object.fromEntries(
     rows.map((r) => [r.task_id as string, r.checked as boolean])
   );
+}
+
+export async function getAreaProgress(year: number, month: number, uptoDay: number) {
+  const userId = await getUserId();
+  const routine = await getRoutine();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const endDay = Math.max(1, Math.min(uptoDay, lastDay));
+  const mm = String(month + 1).padStart(2, "0");
+  const first = `${year}-${mm}-01`;
+  const last = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
+
+  const rows = await sql`
+    SELECT date::text as date, task_id, checked
+    FROM task_check
+    WHERE user_id = ${userId} AND date >= ${first} AND date <= ${last}
+  `;
+
+  const checksByDate = new Map<string, Record<string, boolean>>();
+  for (const row of rows) {
+    const date = row.date as string;
+    const current = checksByDate.get(date) ?? {};
+    current[row.task_id as string] = row.checked as boolean;
+    checksByDate.set(date, current);
+  }
+
+  const planRows = await sql`
+    SELECT id, start_date::text as start_date, race_date::text as race_date
+    FROM training_plan WHERE user_id = ${userId} LIMIT 1
+  `;
+
+  let plan: { startDate: Date; raceDate: Date } | null = null;
+  let requiredSet: Set<string> | null = null;
+  if (planRows[0]) {
+    plan = {
+      startDate: new Date((planRows[0].start_date as string) + "T00:00:00Z"),
+      raceDate: new Date((planRows[0].race_date as string) + "T00:00:00Z"),
+    };
+    const tmpl = await sql`
+      SELECT p.phase_number, t.day_of_week
+      FROM training_session_template t
+      JOIN training_phase p ON p.id = t.phase_id
+      WHERE p.plan_id = ${planRows[0].id as number} AND t.activity_type <> 'rest'
+    `;
+    requiredSet = new Set(tmpl.map((r) => `${r.phase_number}-${r.day_of_week}`));
+  }
+
+  const trainingRows = await sql`
+    SELECT date::text as date, training_done
+    FROM day_state
+    WHERE user_id = ${userId} AND date >= ${first} AND date <= ${last}
+  `;
+  const trainingDoneByDate = new Map(
+    trainingRows.map((row) => [row.date as string, (row.training_done as boolean | null | undefined) === true])
+  );
+
+  const stats = new Map<Pillar, { pillar: Pillar; label: string; completed: number; total: number }>();
+  for (const pillar of PILLARS) {
+    stats.set(pillar, { pillar, label: PILLAR_LABELS[pillar], completed: 0, total: 0 });
+  }
+
+  for (let day = 1; day <= endDay; day++) {
+    const date = new Date(year, month, day);
+    const dateKey = `${year}-${mm}-${String(day).padStart(2, "0")}`;
+    const dayChecks = checksByDate.get(dateKey) ?? {};
+    const rituals = routine
+      .filter((ritual) => ritualAppliesOn(ritual, date))
+      .map((ritual) => ({ id: ritual.id, pillar: ritual.pillar }));
+
+    for (const ritual of [...rituals, ...getFinanceRituals(date).map((ritual) => ({ id: ritual.id, pillar: ritual.pillar }))]) {
+      const stat = stats.get(ritual.pillar);
+      if (!stat) continue;
+      stat.total += 1;
+      if (dayChecks[ritual.id]) stat.completed += 1;
+    }
+
+    if (plan && requiredSet && isTrainingRequiredOn(new Date(dateKey + "T00:00:00Z"), plan, requiredSet)) {
+      const salud = stats.get("salud");
+      if (salud) {
+        salud.total += 1;
+        if (trainingDoneByDate.get(dateKey)) salud.completed += 1;
+      }
+    }
+  }
+
+  return Array.from(stats.values()).map((stat) => ({
+    ...stat,
+    ratio: stat.total > 0 ? stat.completed / stat.total : 0,
+  }));
 }
 
 // ─── SPRINT COMMITMENTS ───────────────────────────────────────────────────────
@@ -188,9 +284,9 @@ export async function getSprintCommitments(isoYear: number, isoWeek: number) {
 
 // ─── CICLO DE MICHELLE ────────────────────────────────────────────────────────
 
-export async function saveCycleStart(cycleStartDate: Date, cycleLength: number = 28) {
+export async function saveCycleStart(cycleStartISO: string, cycleLength: number = 28) {
   const userId = await getUserId();
-  const d = fmtDate(cycleStartDate);
+  const d = cycleStartISO;
   await sql`
     INSERT INTO cycle_log (user_id, cycle_start_date, cycle_length, updated_at)
     VALUES (${userId}, ${d}, ${cycleLength}, NOW())

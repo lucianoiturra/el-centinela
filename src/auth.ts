@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
+import { refreshGoogleAccessToken, shouldRefreshGoogleToken } from "@/lib/google-token";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
@@ -23,60 +25,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
-    // Guarda access_token y refresh_token en el JWT para poder llamar Calendar API
+    async signIn({ user }) {
+      const allowed = (process.env.ALLOWED_EMAILS ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (allowed.length === 0) return true;
+      return !!user.email && allowed.includes(user.email.toLowerCase());
+    },
+
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at; // segundos Unix
+        token.expiresAt = account.expires_at;
+        token.error = undefined;
       }
 
-      // Si el token no expiró, lo devolvemos tal cual. Guard explícito: si expiresAt
-      // es undefined, (undefined * 1000) = NaN y la comparación sería siempre false,
-      // forzando un refresh en CADA request.
       const expiresAt = token.expiresAt as number | undefined;
-      if (expiresAt && Date.now() < expiresAt * 1000 - 60_000) {
+      if (expiresAt && !shouldRefreshGoogleToken({ expiresAt })) {
         return token;
       }
 
-      // Sin refresh token no hay forma de refrescar → devolver lo que haya
-      // (evita golpear el endpoint de Google y marcar error en vano).
       if (!token.refreshToken) {
         return token;
       }
 
-      // Token expirado → refrescar con Google
-      try {
-        const resp = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID!,
-            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-            grant_type: "refresh_token",
-            refresh_token: token.refreshToken as string,
-          }),
-        });
-
-        const data = await resp.json();
-        if (!resp.ok) throw data;
-
-        return {
-          ...token,
-          accessToken: data.access_token,
-          expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
-          // Google solo devuelve refresh_token la primera vez; conservamos el anterior
-          refreshToken: data.refresh_token ?? token.refreshToken,
-        };
-      } catch (err) {
-        console.error("Error refrescando token de Google:", err);
-        return { ...token, error: "RefreshTokenError" };
-      }
+      return refreshGoogleAccessToken({
+        ...token,
+        accessToken: token.accessToken as string | undefined,
+        refreshToken: token.refreshToken as string | undefined,
+        expiresAt,
+        error: token.error as string | undefined,
+      });
     },
 
-    // Expone accessToken y error al cliente (para la ruta de Calendar)
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
       session.error = token.error as string | undefined;
       return session;
     },

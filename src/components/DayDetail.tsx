@@ -6,6 +6,7 @@ import { getFinanceRituals } from "@/lib/finance";
 import {
   getDayState, getDayChecks, setTaskCheck, saveTaa, markTaaDone, saveLineaEspiritual,
 } from "@/app/actions/day";
+import { fmtDate } from "@/lib/offline-queue";
 import TrainingCard from "@/components/TrainingCard";
 
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -29,29 +30,31 @@ export default function DayDetail({ date, routine, onClose }: { date: Date; rout
     [date, routine]
   );
 
+  const dateKey = fmtDate(date);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDayState(date), getDayChecks(date)])
+    Promise.all([getDayState(dateKey), getDayChecks(dateKey)])
       .then(([s, c]) => {
         if (cancelled) return;
         setTaa(s.taa ?? ""); setTaaDone(s.taa_done); setLinea(s.linea ?? ""); setChecks(c); setLoaded(true);
       })
       .catch(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
-  }, [date]);
+  }, [dateKey]);
 
   const toggle = (id: string) => {
     const next = !checks[id];
     setChecks((c) => ({ ...c, [id]: next }));
-    setTaskCheck(date, id, next).then(showFlash).catch(console.error);
+    setTaskCheck(dateKey, id, next).then(showFlash).catch(console.error);
   };
   const toggleDone = () => {
     const next = !taaDone;
     setTaaDone(next);
-    markTaaDone(date, next).then(showFlash).catch(console.error);
+    markTaaDone(dateKey, next).then(showFlash).catch(console.error);
   };
-  const saveTaaText = () => { saveTaa(date, taa.trim()).then(showFlash).catch(console.error); };
-  const saveLineaText = () => { saveLineaEspiritual(date, linea.trim()).then(showFlash).catch(console.error); };
+  const saveTaaText = () => { saveTaa(dateKey, taa.trim()).then(showFlash).catch(console.error); };
+  const saveLineaText = () => { saveLineaEspiritual(dateKey, linea.trim()).then(showFlash).catch(console.error); };
 
   return (
     <div className="gate" onClick={onClose}>

@@ -97,3 +97,33 @@ describe("isTrainingRequiredOn", () => {
     expect(isTrainingRequiredOn(new Date("2026-05-23"), plan, requiredSet)).toBe(false);
   });
 });
+
+// Verifica el contrato nuevo (bug TZ): los server actions reciben strings
+// `YYYY-MM-DD` y construyen el Date como `T00:00:00Z`. La lógica del plan usa
+// getters UTC, así que el día calculado debe coincidir con el string recibido,
+// sin importar la timezone del runtime.
+describe("contrato de fecha string (T00:00:00Z)", () => {
+  const fromISO = (iso: string) => new Date(iso + "T00:00:00Z");
+
+  it("sábado a medianoche local NO se corre de día (isSabbathDay sobre Z)", () => {
+    // 2026-05-23 es sábado.
+    expect(isSabbathDay(fromISO("2026-05-23"))).toBe(true);
+    // El día anterior (viernes) y el siguiente (domingo) NO son sábado.
+    expect(isSabbathDay(fromISO("2026-05-22"))).toBe(false);
+    expect(isSabbathDay(fromISO("2026-05-24"))).toBe(false);
+  });
+
+  it("getUTCDay del Date Z corresponde al día de la semana del string", () => {
+    // 2026-05-25 lunes → getUTCDay 1 → planDay 1
+    expect(jsDayToPlanDay(fromISO("2026-05-25").getUTCDay())).toBe(1);
+    // 2026-05-24 domingo → getUTCDay 0 → planDay 7
+    expect(jsDayToPlanDay(fromISO("2026-05-24").getUTCDay())).toBe(7);
+  });
+
+  it("la fase se calcula igual usando el Date Z del string", () => {
+    const start = fromISO("2026-03-04");
+    const race = fromISO("2026-10-04");
+    expect(calculatePhaseNumber(start, fromISO("2026-03-15"), race)).toBe(1);
+    expect(calculatePhaseNumber(start, fromISO("2026-07-01"), race)).toBe(3);
+  });
+});

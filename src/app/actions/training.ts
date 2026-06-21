@@ -1,7 +1,7 @@
 "use server";
 import { sql } from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
-import { getUserId, fmtDate } from "@/lib/server-user";
+import { getUserId } from "@/lib/server-user";
 import { calculatePhaseNumber, jsDayToPlanDay, isSabbathDay } from "@/lib/training";
 import { TRAINING_SEED } from "@/lib/training-data";
 import type { TrainingSessionTemplate, TrainingExercise } from "@/lib/types";
@@ -121,8 +121,12 @@ export type TrainingCardData = {
 
 // ─── getTrainingCardData ──────────────────────────────────────────────────────
 
-export async function getTrainingCardData(date: Date): Promise<TrainingCardData> {
+export async function getTrainingCardData(dateISO: string): Promise<TrainingCardData> {
   const userId = await getUserId();
+
+  // Construir el Date en UTC (medianoche UTC) para que getUTCDay/getUTCMonth sean
+  // coherentes con el resto de la lógica del plan (lib/training.ts usa UTC).
+  const date = new Date(dateISO + "T00:00:00Z");
 
   if (isSabbathDay(date)) {
     return { session: null, exercises: [], done: false, lastSets: {}, todaySets: {} };
@@ -131,11 +135,11 @@ export async function getTrainingCardData(date: Date): Promise<TrainingCardData>
   const plan = await getTrainingPlan();
   if (!plan) return { session: null, exercises: [], done: false, lastSets: {}, todaySets: {} };
 
-  const startDate = new Date(plan.startDate + "T00:00:00");
-  const raceDate = new Date(plan.raceDate + "T00:00:00");
+  const startDate = new Date(plan.startDate + "T00:00:00Z");
+  const raceDate = new Date(plan.raceDate + "T00:00:00Z");
   const phaseNumber = calculatePhaseNumber(startDate, date, raceDate);
-  const planDay = jsDayToPlanDay(date.getDay());
-  const d = fmtDate(date);
+  const planDay = jsDayToPlanDay(date.getUTCDay());
+  const d = dateISO;
 
   // Fase activa
   const phaseRows = await sql`
@@ -255,12 +259,23 @@ export async function getTrainingCardData(date: Date): Promise<TrainingCardData>
 // ─── markSessionDone ──────────────────────────────────────────────────────────
 
 export async function markSessionDone(
-  date: Date,
+  dateISO: string,
   sessionTemplateId: number,
   done: boolean
 ) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
+
+  // Verificar que la plantilla de sesión pertenece al plan del usuario.
+  const ok = await sql`
+    SELECT 1 FROM training_session_template t
+    JOIN training_phase p ON p.id = t.phase_id
+    JOIN training_plan pl ON pl.id = p.plan_id
+    WHERE t.id = ${sessionTemplateId} AND pl.user_id = ${userId}
+    LIMIT 1
+  `;
+  if (!ok[0]) throw new Error("Sesión inválida");
+
   await sql`
     INSERT INTO training_session_log (user_id, date, session_template_id, done, completed_at, updated_at)
     VALUES (${userId}, ${d}, ${sessionTemplateId}, ${done},
@@ -283,20 +298,43 @@ export async function markSessionDone(
 // ─── saveSetLog ───────────────────────────────────────────────────────────────
 
 export async function saveSetLog(
-  date: Date,
+  dateISO: string,
   exerciseId: number,
   setNumber: number,
   data: { weightKg?: number | null; repsCompleted?: number | null; durationSeconds?: number | null }
 ) {
   const userId = await getUserId();
-  const d = fmtDate(date);
+  const d = dateISO;
+
+  // Verificar que el ejercicio pertenece al plan del usuario.
+  const ok = await sql`
+    SELECT 1 FROM training_exercise e
+    JOIN training_session_template t ON t.id = e.session_template_id
+    JOIN training_phase p ON p.id = t.phase_id
+    JOIN training_plan pl ON pl.id = p.plan_id
+    WHERE e.id = ${exerciseId} AND pl.user_id = ${userId}
+    LIMIT 1
+  `;
+  if (!ok[0]) throw new Error("Ejercicio inválido");
+
+  // Sanear números: descartar no-finitos, negativos o absurdamente grandes.
+  const cleanNum = (v: number | null | undefined) =>
+    v == null || !Number.isFinite(v) || v < 0 || v > 10000 ? null : v;
+  const cleanInt = (v: number | null | undefined) => {
+    const c = cleanNum(v);
+    return c == null ? null : Math.round(c);
+  };
+  const weightKg = cleanNum(data.weightKg);
+  const repsCompleted = cleanInt(data.repsCompleted);
+  const durationSeconds = cleanInt(data.durationSeconds);
+
   await sql`
     INSERT INTO training_set_log
       (user_id, date, exercise_id, set_number, weight_kg, reps_completed, duration_seconds, updated_at)
     VALUES
       (${userId}, ${d}, ${exerciseId}, ${setNumber},
-       ${data.weightKg ?? null}, ${data.repsCompleted ?? null},
-       ${data.durationSeconds ?? null}, NOW())
+       ${weightKg}, ${repsCompleted},
+       ${durationSeconds}, NOW())
     ON CONFLICT (user_id, date, exercise_id, set_number)
     DO UPDATE SET
       weight_kg = EXCLUDED.weight_kg,
