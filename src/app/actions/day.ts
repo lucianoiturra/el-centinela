@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { getUserId } from "@/lib/server-user";
 import { isDayWon, isTrainingRequiredOn } from "@/lib/training";
 import { getRoutine } from "@/app/actions/routine";
+import { getPillarMap } from "@/app/actions/pillar";
 import { getFinanceRituals } from "@/lib/finance";
+import { getResolvedPillarMeta } from "@/lib/pillars";
 import { ritualAppliesOn } from "@/lib/routine-rules";
-import { PILLARS, PILLAR_LABELS, type Pillar } from "@/lib/types";
+import type { Pillar } from "@/lib/types";
 
 // Las fechas llegan desde el cliente como string `YYYY-MM-DD` (su día LOCAL),
 // no como `Date`. Esto evita el bug de timezone: el servidor corre en UTC y
@@ -166,6 +168,7 @@ export async function getDayChecks(dateISO: string): Promise<Record<string, bool
 export async function getAreaProgress(year: number, month: number, uptoDay: number) {
   const userId = await getUserId();
   const routine = await getRoutine();
+  const pillarMap = await getPillarMap();
   const lastDay = new Date(year, month + 1, 0).getDate();
   const endDay = Math.max(1, Math.min(uptoDay, lastDay));
   const mm = String(month + 1).padStart(2, "0");
@@ -216,9 +219,9 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
     trainingRows.map((row) => [row.date as string, (row.training_done as boolean | null | undefined) === true])
   );
 
-  const stats = new Map<Pillar, { pillar: Pillar; label: string; completed: number; total: number }>();
-  for (const pillar of PILLARS) {
-    stats.set(pillar, { pillar, label: PILLAR_LABELS[pillar], completed: 0, total: 0 });
+  const stats = new Map<Pillar, { pillar: Pillar; label: string; color: string; completed: number; total: number }>();
+  for (const [pillar, meta] of pillarMap.entries()) {
+    stats.set(pillar, { pillar, label: meta.label, color: meta.color, completed: 0, total: 0 });
   }
 
   for (let day = 1; day <= endDay; day++) {
@@ -230,25 +233,37 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
       .map((ritual) => ({ id: ritual.id, pillar: ritual.pillar }));
 
     for (const ritual of [...rituals, ...getFinanceRituals(date).map((ritual) => ({ id: ritual.id, pillar: ritual.pillar }))]) {
-      const stat = stats.get(ritual.pillar);
-      if (!stat) continue;
+      let stat = stats.get(ritual.pillar);
+      if (!stat) {
+        const meta = getResolvedPillarMeta(ritual.pillar, pillarMap);
+        stat = { pillar: ritual.pillar, label: meta.label, color: meta.color, completed: 0, total: 0 };
+        stats.set(ritual.pillar, stat);
+      }
       stat.total += 1;
       if (dayChecks[ritual.id]) stat.completed += 1;
     }
 
     if (plan && requiredSet && isTrainingRequiredOn(new Date(dateKey + "T00:00:00Z"), plan, requiredSet)) {
-      const salud = stats.get("salud");
-      if (salud) {
-        salud.total += 1;
-        if (trainingDoneByDate.get(dateKey)) salud.completed += 1;
-      }
+      const saludMeta = getResolvedPillarMeta("salud", pillarMap);
+      const salud = stats.get("salud") ?? {
+        pillar: "salud",
+        label: saludMeta.label,
+        color: saludMeta.color,
+        completed: 0,
+        total: 0,
+      };
+      stats.set("salud", salud);
+      salud.total += 1;
+      if (trainingDoneByDate.get(dateKey)) salud.completed += 1;
     }
   }
 
-  return Array.from(stats.values()).map((stat) => ({
-    ...stat,
-    ratio: stat.total > 0 ? stat.completed / stat.total : 0,
-  }));
+  return Array.from(stats.values())
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map((stat) => ({
+      ...stat,
+      ratio: stat.total > 0 ? stat.completed / stat.total : 0,
+    }));
 }
 
 // ─── SPRINT COMMITMENTS ───────────────────────────────────────────────────────

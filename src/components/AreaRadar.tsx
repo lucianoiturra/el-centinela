@@ -1,10 +1,11 @@
 "use client";
 
-import { PILLAR_COLORS, PILLARS, PILLAR_LABELS, type Pillar } from "@/lib/types";
+import type { Pillar } from "@/lib/types";
 
 export type AreaRadarStat = {
   pillar: Pillar;
   label: string;
+  color: string;
   completed: number;
   total: number;
   ratio: number;
@@ -35,10 +36,7 @@ function percentLabel(ratio: number, total: number) {
 }
 
 export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
-  const ordered = PILLARS.map((pillar) => {
-    const stat = stats.find((item) => item.pillar === pillar);
-    return stat ?? { pillar, label: PILLAR_LABELS[pillar], completed: 0, total: 0, ratio: 0 };
-  });
+  const ordered = stats;
 
   const gridPolygons = Array.from({ length: LEVELS }, (_, level) => {
     const radius = (MAX_RADIUS / LEVELS) * (level + 1);
@@ -96,7 +94,7 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
               cx={point.x}
               cy={point.y}
               r="4.5"
-              fill={PILLAR_COLORS[ordered[index].pillar]}
+              fill={ordered[index].color}
               className="radar-dot"
             />
           ))}
@@ -117,7 +115,7 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
         <div className="radar-legend">
           {ordered.map((stat) => (
             <div className="radar-pill" key={stat.pillar}>
-              <span className="radar-pill-dot" style={{ background: PILLAR_COLORS[stat.pillar] }} />
+              <span className="radar-pill-dot" style={{ background: stat.color }} />
               <span className="radar-pill-label">{stat.label}</span>
               <span className="radar-pill-metric">
                 {percentLabel(stat.ratio, stat.total)} · {stat.completed}/{stat.total}

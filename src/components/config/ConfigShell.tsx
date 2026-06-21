@@ -6,8 +6,9 @@ import VistaMensual from "./VistaMensual";
 import CicloConfig from "./CicloConfig";
 import Diario from "./Diario";
 import ProgresoAreas from "./ProgresoAreas";
+import PilaresConfig from "./PilaresConfig";
 
-type Tab = "rutina" | "ciclo" | "mensual" | "diario" | "areas";
+type Tab = "rutina" | "ciclo" | "mensual" | "diario" | "areas" | "pilares";
 
 export default function ConfigShell() {
   const [tab, setTab] = useState<Tab>("rutina");
@@ -23,6 +24,7 @@ export default function ConfigShell() {
         <button className={tab === "mensual" ? "on" : ""} onClick={() => setTab("mensual")}>Vista mensual</button>
         <button className={tab === "diario" ? "on" : ""} onClick={() => setTab("diario")}>Diario</button>
         <button className={tab === "areas" ? "on" : ""} onClick={() => setTab("areas")}>Áreas</button>
+        <button className={tab === "pilares" ? "on" : ""} onClick={() => setTab("pilares")}>Pilares</button>
       </div>
       <div className="config-body">
         {tab === "rutina" && <MiRutina />}
@@ -30,6 +32,7 @@ export default function ConfigShell() {
         {tab === "ciclo" && <CicloConfig />}
         {tab === "diario" && <Diario />}
         {tab === "areas" && <ProgresoAreas />}
+        {tab === "pilares" && <PilaresConfig />}
       </div>
     </div>
   );

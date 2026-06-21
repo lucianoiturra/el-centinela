@@ -3,10 +3,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
-import { CalendarEvent, PILLAR_COLORS, Ritual, RitualPhase, RoutineRitual } from "@/lib/types";
+import { CalendarEvent, type PillarConfig, Ritual, RitualPhase, RoutineRitual } from "@/lib/types";
 import { getRoutineRituals, isSabbath } from "@/lib/rituals";
 import { getFinanceRituals } from "@/lib/finance";
 import { getRoutine } from "@/app/actions/routine";
+import { getPillars } from "@/app/actions/pillar";
 import { getCyclePhase } from "@/lib/cycle";
 import { sprintLabel } from "@/lib/sprint";
 import { PHASE_META, bgGradient, fmtRem, getFocus, nowMinutes, phaseOf } from "@/lib/time";
@@ -23,6 +24,7 @@ import {
 import { pruneOldKeys } from "@/lib/offline-queue";
 import DayDetail from "@/components/DayDetail";
 import TrainingCard from "@/components/TrainingCard";
+import { getFallbackPillarColor } from "@/lib/pillars";
 
 const DSHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DFULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -53,6 +55,7 @@ export default function Sentinel() {
   // Estado del puente con Google Calendar: si necesitamos reautenticar mostramos el aviso.
   const [calReauth, setCalReauth] = useState(false);
   const [routine, setRoutine] = useState<RoutineRitual[] | null>(null);
+  const [pillars, setPillars] = useState<PillarConfig[]>([]);
   const [cycleInfo, setCycleInfo] = useState<{ date: string; length: number } | null>(null);
   const [linea, setLinea] = useState("");
   const [detailDate, setDetailDate] = useState<Date | null>(null);
@@ -82,6 +85,10 @@ export default function Sentinel() {
         ? getCyclePhase(today, new Date(cycleInfo.date + "T00:00:00"), cycleInfo.length)
         : getCyclePhase(today),
     [today, cycleInfo]
+  );
+  const pillarColors = useMemo(
+    () => Object.fromEntries(pillars.map((pillar) => [pillar.id, pillar.color])),
+    [pillars]
   );
 
   // ── Mount: reloj ──
@@ -172,6 +179,15 @@ export default function Sentinel() {
     getRoutine()
       .then((r) => { if (!cancelled) setRoutine(r); })
       .catch((e) => { if (!cancelled) { console.error("Error cargando rutina:", e); setRoutine([]); } });
+    return () => { cancelled = true; };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    getPillars()
+      .then((data) => { if (!cancelled) setPillars(data); })
+      .catch((e) => { if (!cancelled) console.error("Error cargando pilares:", e); });
     return () => { cancelled = true; };
   }, [mounted]);
 
@@ -305,6 +321,7 @@ export default function Sentinel() {
         <Spine
           rituals={[...rituals, ...eventsToRituals(events)]}
           checks={checks}
+          pillarColors={pillarColors}
           min={min}
           onToggle={toggleCheck}
           showConnect={status !== "authenticated" || calReauth}
@@ -552,9 +569,11 @@ function CierreLinea({ value, onSave }: { value: string; onSave: (t: string) => 
 // ════════════════ SPINE ════════════════
 function Spine({
   rituals, checks, min, onToggle, showConnect, connectLabel, onConnect, lineaValue, onLineaSave,
+  pillarColors,
 }: {
   rituals: Ritual[];
   checks: Record<string, boolean>;
+  pillarColors: Record<string, string>;
   min: number;
   onToggle: (id: string) => void;
   showConnect: boolean;
@@ -594,7 +613,7 @@ function Spine({
                   >
                     <div className="node-box">{done ? "✓" : ""}</div>
                     <div className="node-t">
-                      <span className="acc" style={{ background: PILLAR_COLORS[r.pillar] }} />
+                      <span className="acc" style={{ background: pillarColors[r.pillar] ?? getFallbackPillarColor(r.pillar) }} />
                       {r.icon} {r.label}
                       {r.time && <span className="node-time">{r.time}</span>}
                       {r.source === "calendar" && <span className="tag calendar">calendar</span>}

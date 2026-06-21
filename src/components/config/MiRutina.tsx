@@ -1,14 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { RoutineRitual, RitualPhase, Pillar } from "@/lib/types";
+import type { RoutineRitual, RitualPhase, Pillar, PillarConfig } from "@/lib/types";
+import { getPillars } from "@/app/actions/pillar";
 import { getRoutine, upsertRitual, deleteRitual } from "@/app/actions/routine";
 
 const DOW = ["D", "L", "M", "X", "J", "V", "S"]; // índice = getDay() (0=Dom)
 const PHASES: { id: RitualPhase; label: string }[] = [
   { id: "manana", label: "Mañana" }, { id: "tarde", label: "Tarde" }, { id: "noche", label: "Noche" },
 ];
-const PILLARS: Pillar[] = ["comunion", "salud", "finanzas", "sistema", "basalto", "cab", "pareja", "hogar"];
-
 function emptyRitual(sortOrder: number): RoutineRitual {
   return {
     id: "", label: "", icon: "•", pillar: "sistema", phase: "manana",
@@ -19,6 +18,7 @@ function emptyRitual(sortOrder: number): RoutineRitual {
 
 export default function MiRutina() {
   const [rituals, setRituals] = useState<RoutineRitual[] | null>(null);
+  const [pillars, setPillars] = useState<PillarConfig[] | null>(null);
   const [draft, setDraft] = useState<RoutineRitual | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const showFlash = (msg: string) => {
@@ -28,6 +28,9 @@ export default function MiRutina() {
 
   const reload = () => getRoutine().then(setRituals).catch((e) => { console.error(e); setRituals([]); });
   useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    getPillars().then(setPillars).catch((e) => { console.error(e); setPillars([]); });
+  }, []);
 
   const save = async (r: RoutineRitual) => {
     await upsertRitual(r);
@@ -42,16 +45,16 @@ export default function MiRutina() {
     showFlash("✓ Borrado");
   };
 
-  if (rituals === null) return <div className="config-soon">Cargando…</div>;
+  if (rituals === null || pillars === null) return <div className="config-soon">Cargando…</div>;
 
   return (
     <div className="rutina">
       {flash && <div className="rutina-flash">{flash}</div>}
       {rituals.map((r) => (
-        <RitualEditor key={r.id} value={r} onSave={save} onDelete={() => remove(r.id)} />
+        <RitualEditor key={r.id} value={r} pillars={pillars} onSave={save} onDelete={() => remove(r.id)} />
       ))}
       {draft ? (
-        <RitualEditor value={draft} onSave={save} onDelete={() => setDraft(null)} isNew />
+        <RitualEditor value={draft} pillars={pillars} onSave={save} onDelete={() => setDraft(null)} isNew />
       ) : (
         <button className="rutina-add" onClick={() => setDraft(emptyRitual(rituals.length))}>+ nuevo ritual</button>
       )}
@@ -60,8 +63,8 @@ export default function MiRutina() {
 }
 
 function RitualEditor({
-  value, onSave, onDelete, isNew,
-}: { value: RoutineRitual; onSave: (r: RoutineRitual) => void; onDelete: () => void; isNew?: boolean }) {
+  value, pillars, onSave, onDelete, isNew,
+}: { value: RoutineRitual; pillars: PillarConfig[]; onSave: (r: RoutineRitual) => void; onDelete: () => void; isNew?: boolean }) {
   const [r, setR] = useState<RoutineRitual>(value);
   const toggleDay = (d: number) =>
     setR((x) => ({ ...x, days: x.days.includes(d) ? x.days.filter((y) => y !== d) : [...x.days, d].sort() }));
@@ -77,7 +80,7 @@ function RitualEditor({
           {PHASES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
         <select value={r.pillar} onChange={(e) => setR({ ...r, pillar: e.target.value as Pillar })}>
-          {PILLARS.map((p) => <option key={p} value={p}>{p}</option>)}
+          {pillars.map((pillar) => <option key={pillar.id} value={pillar.id}>{pillar.label}</option>)}
         </select>
         <input className="rit-time" placeholder="hora (ej 22:00)" value={r.time ?? ""}
           onChange={(e) => setR({ ...r, time: e.target.value || undefined })} />

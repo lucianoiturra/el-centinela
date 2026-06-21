@@ -1,36 +1,13 @@
 // Tipos compartidos de El Centinela
 
-export type Pillar =
-  | "comunion"
-  | "salud"
-  | "finanzas"
-  | "sistema"
-  | "basalto"
-  | "cab"
-  | "pareja"
-  | "hogar";
+export type Pillar = string;
 
-export const PILLARS: Pillar[] = [
-  "comunion",
-  "salud",
-  "finanzas",
-  "sistema",
-  "basalto",
-  "cab",
-  "pareja",
-  "hogar",
-];
-
-export const PILLAR_LABELS: Record<Pillar, string> = {
-  comunion: "Comunion",
-  salud: "Salud",
-  finanzas: "Finanzas",
-  sistema: "Sistema",
-  basalto: "Basalto",
-  cab: "CAB",
-  pareja: "Pareja",
-  hogar: "Hogar",
-};
+export interface PillarConfig {
+  id: string;
+  label: string;
+  color: string;
+  sortOrder: number;
+}
 
 export type Phase = "madrugada" | "manana" | "tarde" | "noche";
 export type RitualPhase = Exclude<Phase, "madrugada">;
@@ -89,17 +66,6 @@ export interface CyclePhaseInfo {
   desc: string;
   dayInCycle: number;
 }
-
-export const PILLAR_COLORS: Record<Pillar, string> = {
-  comunion: "#a78bfa",
-  salud: "#2dd4bf",
-  finanzas: "#4ade80",
-  sistema: "#94a3b8",
-  basalto: "#fb923c",
-  cab: "#93c5fd",
-  pareja: "#f9a8d4",
-  hogar: "#7dd3fc",
-};
 
 // ─── Entrenamiento Ciclismo ───────────────────────────────────────────────────
 
