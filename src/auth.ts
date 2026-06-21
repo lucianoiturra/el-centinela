@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
+import { refreshGoogleAccessToken, shouldRefreshGoogleToken } from "@/lib/google-token";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
@@ -23,7 +25,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
-    // Allowlist de emails. Si ALLOWED_EMAILS está vacío, login abierto (actual).
     async signIn({ user }) {
       const allowed = (process.env.ALLOWED_EMAILS ?? "")
         .split(",")
@@ -33,70 +34,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return !!user.email && allowed.includes(user.email.toLowerCase());
     },
 
-    // Guarda access_token y refresh_token en el JWT para poder llamar Calendar API
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at; // segundos Unix
+        token.expiresAt = account.expires_at;
+        token.error = undefined;
       }
 
-      // Si el token no expiró, lo devolvemos tal cual. Guard explícito: si expiresAt
-      // es undefined, (undefined * 1000) = NaN y la comparación sería siempre false,
-      // forzando un refresh en CADA request.
-      // Margen de 5 min: refrescamos antes de la expiración real para reducir la
-      // ventana en que requests concurrentes intentan refrescar a la vez.
       const expiresAt = token.expiresAt as number | undefined;
-      if (expiresAt && Date.now() < expiresAt * 1000 - 5 * 60_000) {
+      if (expiresAt && !shouldRefreshGoogleToken({ expiresAt })) {
         return token;
       }
 
-      // Sin refresh token no hay forma de refrescar → devolver lo que haya
-      // (evita golpear el endpoint de Google y marcar error en vano).
       if (!token.refreshToken) {
         return token;
       }
 
-      // Token expirado → refrescar con Google
-      try {
-        const resp = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID!,
-            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-            grant_type: "refresh_token",
-            refresh_token: token.refreshToken as string,
-          }),
-        });
-
-        const data = await resp.json();
-        if (!resp.ok) throw data;
-
-        return {
-          ...token,
-          accessToken: data.access_token,
-          expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
-          // Google solo devuelve refresh_token la primera vez; conservamos el anterior
-          refreshToken: data.refresh_token ?? token.refreshToken,
-        };
-      } catch (err) {
-        console.error("Error refrescando token de Google:", err);
-        // Solo invalidar la sesión si Google rechaza el refresh_token de forma
-        // definitiva (invalid_grant). Ante fallos transitorios (red, 5xx)
-        // conservamos el token para reintentar en el próximo request — la carrera
-        // entre requests concurrentes es una limitación conocida de next-auth v5
-        // con JWT strategy; el lock distribuido no se justifica para una app
-        // monousuario.
-        const isInvalidGrant =
-          typeof err === "object" && err !== null && (err as { error?: string }).error === "invalid_grant";
-        return isInvalidGrant ? { ...token, error: "RefreshTokenError" } : token;
-      }
+      return refreshGoogleAccessToken({
+        ...token,
+        accessToken: token.accessToken as string | undefined,
+        refreshToken: token.refreshToken as string | undefined,
+        expiresAt,
+        error: token.error as string | undefined,
+      });
     },
 
-    // Solo expone `error` al cliente (para mostrar "Reconectar calendario").
-    // El accessToken NO se serializa al navegador: vive únicamente en el JWT
-    // cifrado y se lee server-side con getToken() en /api/calendar.
     async session({ session, token }) {
       session.error = token.error as string | undefined;
       return session;

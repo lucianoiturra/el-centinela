@@ -235,3 +235,31 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .training-offline-banner.synced{ background:rgba(45,212,191,.08); border-color:rgba(45,212,191,.25); color:var(--salud); }
 .training-badge{ display:flex; align-items:center; gap:8px; font-size:.9rem; color:var(--salud); margin-top:12px; }
 .training-badge-undo{ background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:.72rem; text-decoration:underline; text-underline-offset:2px; font-family:inherit; margin-left:auto; }
+
+.radar-card{ margin-top:24px; border:1px solid var(--panel-bd); background:
+  radial-gradient(circle at top, rgba(147,197,253,.08), transparent 42%),
+  linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+  border-radius:18px; padding:20px; backdrop-filter:blur(8px); overflow:hidden; }
+.radar-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:16px; }
+.radar-kicker{ font-size:.68rem; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); font-weight:700; }
+.radar-head h3{ margin-top:7px; font-family:Georgia,serif; font-size:1.35rem; color:#fff; font-weight:500; }
+.radar-note{ font-size:.76rem; color:var(--ink-dim); text-align:right; max-width:180px; line-height:1.35; }
+.radar-wrap{ display:grid; grid-template-columns:minmax(0, 1.05fr) minmax(0, .95fr); gap:12px 18px; align-items:center; }
+.radar-svg{ width:100%; height:auto; overflow:visible; }
+.radar-grid{ fill:none; stroke:rgba(255,255,255,.09); stroke-width:1; }
+.radar-axis{ stroke:rgba(255,255,255,.12); stroke-width:1; }
+.radar-shape-fill{ fill:rgba(147,197,253,.16); }
+.radar-shape-stroke{ fill:none; stroke:rgba(147,197,253,.9); stroke-width:2; }
+.radar-dot{ filter:drop-shadow(0 0 10px rgba(255,255,255,.15)); }
+.radar-label{ fill:var(--ink-dim); font-size:11px; letter-spacing:.04em; }
+.radar-legend{ display:flex; flex-direction:column; gap:8px; }
+.radar-pill{ display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.05); }
+.radar-pill-dot{ width:10px; height:10px; border-radius:50%; }
+.radar-pill-label{ font-size:.84rem; color:var(--ink); }
+.radar-pill-metric{ font-family:ui-monospace,Menlo,monospace; font-size:.72rem; color:var(--ink-dim); }
+
+@media(max-width:640px){
+  .radar-wrap{ grid-template-columns:1fr; }
+  .radar-note{ text-align:left; max-width:none; }
+  .radar-svg{ max-width:320px; margin:0 auto; display:block; }
+}
