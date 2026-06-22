@@ -1,7 +1,7 @@
 // El Centinela — Service Worker
 // Estrategia: cache-first para assets estáticos, network-first para rutas de app
 
-const CACHE_NAME = "centinela-v3";
+const CACHE_NAME = "centinela-v4";
 
 const STATIC_ASSETS = [
   "/",
@@ -74,4 +74,26 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
+});
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  const data = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || "/icons/icon-192.png",
+      badge: data.badge || "/icons/icon-192.png",
+      tag: data.tag,
+      data: {
+        url: data.url || "/",
+      },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+  event.waitUntil(clients.openWindow(targetUrl));
 });

@@ -24,7 +24,7 @@ export default function RootLayout({
           id="register-sw"
           strategy="afterInteractive"
           dangerouslySetInnerHTML={{
-            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`,
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }); }`,
           }}
         />
       </body>

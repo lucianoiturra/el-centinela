@@ -9,6 +9,14 @@ export interface PillarConfig {
   sortOrder: number;
 }
 
+export interface NotificationPreferences {
+  timezone: string;
+  taaEnabled: boolean;
+  taaTime: string;
+  cierreEnabled: boolean;
+  cierreTime: string;
+}
+
 export type Phase = "madrugada" | "manana" | "tarde" | "noche";
 export type RitualPhase = Exclude<Phase, "madrugada">;
 

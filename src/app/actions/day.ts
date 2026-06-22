@@ -165,20 +165,15 @@ export async function getDayChecks(dateISO: string): Promise<Record<string, bool
   );
 }
 
-export async function getAreaProgress(year: number, month: number, uptoDay: number) {
+export async function getAreaProgressRange(startISO: string, endISO: string) {
   const userId = await getUserId();
   const routine = await getRoutine();
   const pillarMap = await getPillarMap();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const endDay = Math.max(1, Math.min(uptoDay, lastDay));
-  const mm = String(month + 1).padStart(2, "0");
-  const first = `${year}-${mm}-01`;
-  const last = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
 
   const rows = await sql`
     SELECT date::text as date, task_id, checked
     FROM task_check
-    WHERE user_id = ${userId} AND date >= ${first} AND date <= ${last}
+    WHERE user_id = ${userId} AND date >= ${startISO} AND date <= ${endISO}
   `;
 
   const checksByDate = new Map<string, Record<string, boolean>>();
@@ -213,7 +208,7 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
   const trainingRows = await sql`
     SELECT date::text as date, training_done
     FROM day_state
-    WHERE user_id = ${userId} AND date >= ${first} AND date <= ${last}
+    WHERE user_id = ${userId} AND date >= ${startISO} AND date <= ${endISO}
   `;
   const trainingDoneByDate = new Map(
     trainingRows.map((row) => [row.date as string, (row.training_done as boolean | null | undefined) === true])
@@ -224,9 +219,11 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
     stats.set(pillar, { pillar, label: meta.label, color: meta.color, completed: 0, total: 0 });
   }
 
-  for (let day = 1; day <= endDay; day++) {
-    const date = new Date(year, month, day);
-    const dateKey = `${year}-${mm}-${String(day).padStart(2, "0")}`;
+  const cursor = new Date(`${startISO}T00:00:00`);
+  const end = new Date(`${endISO}T00:00:00`);
+  while (cursor <= end) {
+    const date = new Date(cursor);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     const dayChecks = checksByDate.get(dateKey) ?? {};
     const rituals = routine
       .filter((ritual) => ritualAppliesOn(ritual, date))
@@ -256,6 +253,8 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
       salud.total += 1;
       if (trainingDoneByDate.get(dateKey)) salud.completed += 1;
     }
+
+    cursor.setDate(cursor.getDate() + 1);
   }
 
   return Array.from(stats.values())
@@ -264,6 +263,14 @@ export async function getAreaProgress(year: number, month: number, uptoDay: numb
       ...stat,
       ratio: stat.total > 0 ? stat.completed / stat.total : 0,
     }));
+}
+
+export async function getAreaProgress(year: number, month: number, uptoDay: number) {
+  const endDay = Math.max(1, Math.min(uptoDay, new Date(year, month + 1, 0).getDate()));
+  const mm = String(month + 1).padStart(2, "0");
+  const startISO = `${year}-${mm}-01`;
+  const endISO = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
+  return getAreaProgressRange(startISO, endISO);
 }
 
 // ─── SPRINT COMMITMENTS ───────────────────────────────────────────────────────

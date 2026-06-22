@@ -9,6 +9,10 @@ export type AreaRadarStat = {
   completed: number;
   total: number;
   ratio: number;
+  previousCompleted?: number;
+  previousTotal?: number;
+  previousRatio?: number;
+  deltaRatio?: number;
 };
 
 const SIZE = 320;
@@ -35,6 +39,12 @@ function percentLabel(ratio: number, total: number) {
   return `${Math.round(ratio * 100)}%`;
 }
 
+function deltaLabel(deltaRatio?: number) {
+  if (!deltaRatio) return "sin cambio";
+  const points = Math.round(Math.abs(deltaRatio) * 100);
+  return `${deltaRatio > 0 ? "↑" : "↓"} ${points} pts`;
+}
+
 export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
   const ordered = stats;
 
@@ -49,6 +59,9 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
     return { x2: point.x, y2: point.y };
   });
 
+  const previousShapePoints = ordered.map((stat, index) =>
+    polarPoint(index, ordered.length, Math.max(12, (stat.previousRatio ?? 0) * MAX_RADIUS))
+  );
   const shapePoints = ordered.map((stat, index) =>
     polarPoint(index, ordered.length, Math.max(12, stat.ratio * MAX_RADIUS))
   );
@@ -62,10 +75,10 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
     <section className="radar-card" aria-label="Progreso por area">
       <div className="radar-head">
         <div>
-          <div className="radar-kicker">Pulso del dia</div>
+          <div className="radar-kicker">Pulso comparativo</div>
           <h3>Progreso por area</h3>
         </div>
-        <div className="radar-note">Rituales completados por pilar</div>
+        <div className="radar-note">Relleno actual, contorno punteado anterior</div>
       </div>
 
       <div className="radar-wrap">
@@ -85,6 +98,7 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
             />
           ))}
 
+          <polygon points={pointsToString(previousShapePoints)} className="radar-shape-previous" />
           <polygon points={pointsToString(shapePoints)} className="radar-shape-fill" />
           <polygon points={pointsToString(shapePoints)} className="radar-shape-stroke" />
 
@@ -119,6 +133,9 @@ export default function AreaRadar({ stats }: { stats: AreaRadarStat[] }) {
               <span className="radar-pill-label">{stat.label}</span>
               <span className="radar-pill-metric">
                 {percentLabel(stat.ratio, stat.total)} · {stat.completed}/{stat.total}
+              </span>
+              <span className={`radar-pill-delta${(stat.deltaRatio ?? 0) > 0 ? " up" : (stat.deltaRatio ?? 0) < 0 ? " down" : ""}`}>
+                {deltaLabel(stat.deltaRatio)}
               </span>
             </div>
           ))}

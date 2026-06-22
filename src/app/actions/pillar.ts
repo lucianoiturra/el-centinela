@@ -65,7 +65,7 @@ export async function upsertPillar(input: Partial<PillarConfig> & Pick<PillarCon
 
   let id = input.id?.trim() || normalizePillarId(input.label);
   if (!id) {
-    throw new Error("El pilar necesita un nombre valido.");
+    return { ok: false as const, message: "El pilar necesita un nombre valido." };
   }
 
   if (!input.id) {
@@ -86,13 +86,14 @@ export async function upsertPillar(input: Partial<PillarConfig> & Pick<PillarCon
 
   revalidatePath("/");
   revalidatePath("/configuracion");
+  return { ok: true as const, id };
 }
 
 export async function deletePillar(id: string) {
   const userId = await getUserId();
 
   if (isReservedPillarId(id)) {
-    throw new Error("Ese pilar lo usa la app y no se puede borrar.");
+    return { ok: false as const, message: "Ese pilar lo usa la app y no se puede borrar." };
   }
 
   const usage = await sql`
@@ -102,7 +103,7 @@ export async function deletePillar(id: string) {
   `;
 
   if ((usage[0]?.count as number | undefined) && (usage[0]?.count as number) > 0) {
-    throw new Error("No puedes borrar un pilar que todavia esta en uso en tu rutina.");
+    return { ok: false as const, message: "No puedes borrar un pilar que todavia esta en uso en tu rutina." };
   }
 
   await sql`
@@ -112,6 +113,7 @@ export async function deletePillar(id: string) {
 
   revalidatePath("/");
   revalidatePath("/configuracion");
+  return { ok: true as const };
 }
 
 export async function getPillarMap() {

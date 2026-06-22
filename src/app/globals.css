@@ -136,6 +136,8 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .rit-card{ border:1px solid var(--panel-bd); background:var(--panel); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; }
 .rit-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .rit-card input, .rit-card select{ background:rgba(255,255,255,.05); border:1px solid var(--panel-bd); color:var(--ink); border-radius:8px; padding:6px 8px; font-size:.85rem; }
+.notif-toggle{ display:flex; align-items:center; gap:8px; color:var(--ink); font-size:.85rem; }
+.notif-toggle input{ accent-color:var(--gold); }
 .rit-icon{ width:42px; text-align:center; }
 .rit-label{ flex:1; min-width:140px; }
 .rit-time{ width:120px; }
@@ -248,18 +250,29 @@ body.sabbath::before{ background:radial-gradient(ellipse at center,rgba(180,255,
 .radar-svg{ width:100%; height:auto; overflow:visible; }
 .radar-grid{ fill:none; stroke:rgba(255,255,255,.09); stroke-width:1; }
 .radar-axis{ stroke:rgba(255,255,255,.12); stroke-width:1; }
+.radar-shape-previous{ fill:none; stroke:rgba(255,255,255,.24); stroke-width:1.4; stroke-dasharray:5 5; }
 .radar-shape-fill{ fill:rgba(147,197,253,.16); }
 .radar-shape-stroke{ fill:none; stroke:rgba(147,197,253,.9); stroke-width:2; }
 .radar-dot{ filter:drop-shadow(0 0 10px rgba(255,255,255,.15)); }
 .radar-label{ fill:var(--ink-dim); font-size:11px; letter-spacing:.04em; }
 .radar-legend{ display:flex; flex-direction:column; gap:8px; }
-.radar-pill{ display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.05); }
+.radar-pill{ display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.05); }
 .radar-pill-dot{ width:10px; height:10px; border-radius:50%; }
 .radar-pill-label{ font-size:.84rem; color:var(--ink); }
 .radar-pill-metric{ font-family:ui-monospace,Menlo,monospace; font-size:.72rem; color:var(--ink-dim); }
+.radar-pill-delta{ font-family:ui-monospace,Menlo,monospace; font-size:.7rem; color:var(--ink-faint); }
+.radar-pill-delta.up{ color:#4ade80; }
+.radar-pill-delta.down{ color:#fb7185; }
+.radar-summary{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 6px; }
+.radar-summary-chip{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:6px 10px; font-size:.72rem; font-weight:700; letter-spacing:.04em; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); color:var(--ink-dim); }
+.radar-summary-chip.up{ color:#4ade80; border-color:rgba(74,222,128,.24); background:rgba(74,222,128,.08); }
+.radar-summary-chip.down{ color:#fb7185; border-color:rgba(251,113,133,.24); background:rgba(251,113,133,.08); }
+.radar-summary-chip.same{ color:var(--ink-dim); }
 
 @media(max-width:640px){
   .radar-wrap{ grid-template-columns:1fr; }
   .radar-note{ text-align:left; max-width:none; }
   .radar-svg{ max-width:320px; margin:0 auto; display:block; }
+  .radar-pill{ grid-template-columns:10px minmax(0,1fr); }
+  .radar-pill-metric, .radar-pill-delta{ grid-column:2; }
 }

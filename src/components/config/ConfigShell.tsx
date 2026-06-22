@@ -7,8 +7,9 @@ import CicloConfig from "./CicloConfig";
 import Diario from "./Diario";
 import ProgresoAreas from "./ProgresoAreas";
 import PilaresConfig from "./PilaresConfig";
+import NotificacionesConfig from "./NotificacionesConfig";
 
-type Tab = "rutina" | "ciclo" | "mensual" | "diario" | "areas" | "pilares";
+type Tab = "rutina" | "ciclo" | "mensual" | "diario" | "areas" | "pilares" | "notificaciones";
 
 export default function ConfigShell() {
   const [tab, setTab] = useState<Tab>("rutina");
@@ -25,6 +26,7 @@ export default function ConfigShell() {
         <button className={tab === "diario" ? "on" : ""} onClick={() => setTab("diario")}>Diario</button>
         <button className={tab === "areas" ? "on" : ""} onClick={() => setTab("areas")}>Áreas</button>
         <button className={tab === "pilares" ? "on" : ""} onClick={() => setTab("pilares")}>Pilares</button>
+        <button className={tab === "notificaciones" ? "on" : ""} onClick={() => setTab("notificaciones")}>Notificaciones</button>
       </div>
       <div className="config-body">
         {tab === "rutina" && <MiRutina />}
@@ -33,6 +35,7 @@ export default function ConfigShell() {
         {tab === "diario" && <Diario />}
         {tab === "areas" && <ProgresoAreas />}
         {tab === "pilares" && <PilaresConfig />}
+        {tab === "notificaciones" && <NotificacionesConfig />}
       </div>
     </div>
   );

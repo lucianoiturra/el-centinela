@@ -36,24 +36,24 @@ export default function PilaresConfig() {
   }, []);
 
   const save = async (pillar: PillarConfig) => {
-    try {
-      await upsertPillar(pillar);
-      setDraft(null);
-      reload();
-      showFlash("✓ Pilar guardado");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "No se pudo guardar el pilar.");
+    const result = await upsertPillar(pillar);
+    if (!result.ok) {
+      alert(result.message);
+      return;
     }
+    setDraft(null);
+    reload();
+    showFlash("✓ Pilar guardado");
   };
 
   const remove = async (id: string) => {
-    try {
-      await deletePillar(id);
-      reload();
-      showFlash("✓ Pilar borrado");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "No se pudo borrar el pilar.");
+    const result = await deletePillar(id);
+    if (!result.ok) {
+      alert(result.message);
+      return;
     }
+    reload();
+    showFlash("✓ Pilar borrado");
   };
 
   if (pillars === null) return <div className="config-soon">Cargando…</div>;

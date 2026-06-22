@@ -11,7 +11,7 @@ const DEFAULT_PILLARS: PillarConfig[] = [
   { id: "hogar", label: "Hogar", color: "#7dd3fc", sortOrder: 7 },
 ];
 
-const RESERVED_PILLAR_IDS = new Set(["salud", "finanzas", "sistema", "cab"]);
+const RESERVED_PILLAR_IDS = new Set(["salud", "finanzas", "sistema"]);
 const FALLBACK_COLORS = ["#60a5fa", "#f472b6", "#34d399", "#f59e0b", "#a78bfa", "#fb7185", "#22d3ee", "#facc15"];
 
 export function getDefaultPillars() {
