@@ -31,6 +31,29 @@ const DEFAULTS: NotificationPreferences = {
   cierreTime: "21:30",
 };
 
+const SERVICE_WORKER_URL = "/sw.js?v=2026-06-21-2";
+const SERVICE_WORKER_TIMEOUT_MS = 4000;
+
+async function getServiceWorkerRegistration() {
+  const existing = await navigator.serviceWorker.getRegistration("/");
+  if (existing) return existing;
+  return navigator.serviceWorker.register(SERVICE_WORKER_URL, {
+    scope: "/",
+    updateViaCache: "none",
+  });
+}
+
+async function getPushSubscriptionWithTimeout() {
+  const registration = await Promise.race([
+    getServiceWorkerRegistration(),
+    new Promise<never>((_, reject) =>
+      window.setTimeout(() => reject(new Error("Service worker timeout")), SERVICE_WORKER_TIMEOUT_MS)
+    ),
+  ]);
+
+  return registration.pushManager.getSubscription();
+}
+
 export default function NotificacionesConfig() {
   const [supported, setSupported] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -62,26 +85,39 @@ export default function NotificacionesConfig() {
       const canPush = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
       if (!cancelled) setSupported(canPush);
 
-      const [{ configured, preferences }, count] = await Promise.all([
-        getNotificationPreferences(),
-        getPushSubscriptionCount(),
-      ]);
+      try {
+        const [preferencesResult, countResult] = await Promise.allSettled([
+          getNotificationPreferences(),
+          getPushSubscriptionCount(),
+        ]);
 
-      if (cancelled) return;
-      setConfigured(configured);
-      setPreferences({
-        ...preferences,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || preferences.timezone,
-      });
-      setSubscriptionCount(count);
+        if (cancelled) return;
 
-      if (canPush) {
-        const registration = await navigator.serviceWorker.ready;
-        const sub = await registration.pushManager.getSubscription();
-        if (!cancelled) setSubscription(sub);
+        const notificationState =
+          preferencesResult.status === "fulfilled"
+            ? preferencesResult.value
+            : { configured: false, preferences: DEFAULTS };
+        const count = countResult.status === "fulfilled" ? countResult.value : 0;
+
+        setConfigured(notificationState.configured);
+        setPreferences({
+          ...notificationState.preferences,
+          timezone:
+            Intl.DateTimeFormat().resolvedOptions().timeZone || notificationState.preferences.timezone,
+        });
+        setSubscriptionCount(count);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
 
-      if (!cancelled) setLoading(false);
+      if (!canPush) return;
+
+      try {
+        const sub = await getPushSubscriptionWithTimeout();
+        if (!cancelled) setSubscription(sub);
+      } catch (error) {
+        console.error("No se pudo obtener la suscripcion push:", error);
+      }
     }
 
     load().catch((error) => {
@@ -104,7 +140,7 @@ export default function NotificacionesConfig() {
       alert("Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en el cliente.");
       return;
     }
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await getServiceWorkerRegistration();
     const sub = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
