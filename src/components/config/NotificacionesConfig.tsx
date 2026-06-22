@@ -63,6 +63,10 @@ export default function NotificacionesConfig() {
   const [testMessage, setTestMessage] = useState("Prueba desde El Centinela");
   const [flash, setFlash] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification === "undefined" ? "default" : Notification.permission
+  );
 
   const isIOS = useMemo(
     () => typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent),
@@ -75,7 +79,7 @@ export default function NotificacionesConfig() {
 
   const showFlash = (msg: string) => {
     setFlash(msg);
-    setTimeout(() => setFlash(null), 2200);
+    window.setTimeout(() => setFlash(null), 2600);
   };
 
   useEffect(() => {
@@ -83,7 +87,10 @@ export default function NotificacionesConfig() {
 
     async function load() {
       const canPush = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
-      if (!cancelled) setSupported(canPush);
+      if (!cancelled) {
+        setSupported(canPush);
+        setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
+      }
 
       try {
         const [preferencesResult, countResult] = await Promise.allSettled([
@@ -132,39 +139,83 @@ export default function NotificacionesConfig() {
 
   async function subscribeToPush() {
     if (!configured) {
-      alert("Faltan las claves VAPID del servidor.");
+      showFlash("Faltan las claves VAPID del servidor.");
       return;
     }
+
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!publicKey) {
-      alert("Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en el cliente.");
+      showFlash("Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en el cliente.");
       return;
     }
-    const registration = await getServiceWorkerRegistration();
-    const sub = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
-    const result = await savePushSubscription(JSON.parse(JSON.stringify(sub)), navigator.userAgent);
-    if (result.ok) {
+
+    if (isIOS && !isStandalone) {
+      showFlash("Instala la app en la pantalla de inicio para activar push.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const granted =
+        typeof Notification !== "undefined" && Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+      setPermission(granted);
+
+      if (granted !== "granted") {
+        showFlash("Debes permitir notificaciones en el navegador.");
+        return;
+      }
+
+      const registration = await getServiceWorkerRegistration();
+      const existing = await registration.pushManager.getSubscription();
+      const sub =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        }));
+
+      const result = await savePushSubscription(JSON.parse(JSON.stringify(sub)), navigator.userAgent);
+      if (!result.ok) {
+        showFlash("No se pudo guardar la suscripcion.");
+        return;
+      }
+
       setSubscription(sub);
-      setSubscriptionCount((count) => count + 1);
-      showFlash("✓ Dispositivo suscrito");
+      setSubscriptionCount((count) => (existing ? count : count + 1));
+      showFlash("Push activado");
+    } catch (error) {
+      console.error("Error activando push:", error);
+      showFlash("No se pudo activar push. Revisa permisos del navegador.");
+    } finally {
+      setBusy(false);
     }
   }
 
   async function unsubscribeFromPush() {
     if (!subscription) return;
-    await subscription.unsubscribe();
-    await removePushSubscription(subscription.endpoint);
-    setSubscription(null);
-    setSubscriptionCount((count) => Math.max(0, count - 1));
-    showFlash("✓ Suscripcion eliminada");
+
+    setBusy(true);
+
+    try {
+      await subscription.unsubscribe();
+      await removePushSubscription(subscription.endpoint);
+      setSubscription(null);
+      setSubscriptionCount((count) => Math.max(0, count - 1));
+      showFlash("Push desactivado");
+    } catch (error) {
+      console.error("Error desactivando push:", error);
+      showFlash("No se pudo desactivar push.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function savePrefs() {
     await saveNotificationPreferences(preferences);
-    showFlash("✓ Horarios guardados");
+    showFlash("Horarios guardados");
   }
 
   async function sendTest() {
@@ -173,10 +224,10 @@ export default function NotificacionesConfig() {
       alert(result.message);
       return;
     }
-    showFlash(`✓ Prueba enviada (${result.sent})`);
+    showFlash(`Prueba enviada (${result.sent})`);
   }
 
-  if (loading) return <div className="config-soon">Cargando…</div>;
+  if (loading) return <div className="config-soon">Cargando...</div>;
 
   return (
     <div className="rutina">
@@ -199,14 +250,27 @@ export default function NotificacionesConfig() {
                 En iPhone/iPad necesitas instalar la app en la pantalla de inicio para recibir push.
               </div>
             )}
+            {permission === "denied" && (
+              <div className="config-soon" style={{ padding: 0 }}>
+                Las notificaciones estan bloqueadas para este sitio en el navegador.
+              </div>
+            )}
             <div className="rit-row" style={{ justifyContent: "space-between" }}>
               <div className="radar-note" style={{ textAlign: "left", maxWidth: "none" }}>
                 Dispositivos suscritos: {subscriptionCount}
               </div>
               {subscription ? (
-                <button className="rit-del" onClick={unsubscribeFromPush}>Desactivar push</button>
+                <button className="rit-del" onClick={unsubscribeFromPush} disabled={busy}>
+                  {busy ? "Procesando..." : "Desactivar push"}
+                </button>
               ) : (
-                <button className="rit-save" onClick={subscribeToPush} disabled={!configured}>Activar push</button>
+                <button
+                  className="rit-save"
+                  onClick={subscribeToPush}
+                  disabled={!configured || busy || (isIOS && !isStandalone)}
+                >
+                  {busy ? "Procesando..." : "Activar push"}
+                </button>
               )}
             </div>
             <div className="rit-row">
@@ -216,7 +280,9 @@ export default function NotificacionesConfig() {
                 onChange={(e) => setTestMessage(e.target.value)}
                 placeholder="Mensaje de prueba"
               />
-              <button className="rit-save" onClick={sendTest} disabled={!subscription || !configured}>Enviar prueba</button>
+              <button className="rit-save" onClick={sendTest} disabled={!subscription || !configured || busy}>
+                Enviar prueba
+              </button>
             </div>
           </>
         )}
